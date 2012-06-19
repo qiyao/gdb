@@ -1,0 +1,74 @@
+# Copyright 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+load_lib mi-support.exp
+load_lib trace-support.exp
+
+standard_testfile status-stop.c
+
+if { [gdb_compile "$srcdir/$subdir/$srcfile" $binfile \
+	  executable {debug nowarnings}] != "" } {
+    untested mi-record-changed.exp
+    return -1
+}
+
+clean_restart $testfile
+
+if ![runto_main] {
+    fail "Can't run to main to check for trace support"
+    return -1
+}
+
+if ![gdb_target_supports_trace] {
+    unsupported "target does not support trace"
+    return -1;
+}
+
+gdb_exit
+
+# Verify that MI notification '=trace-started' and '=trace-stopped' are
+# emitted for normal 'tstart' and 'tstart' command.
+
+proc test_normal_tstart_stop { } {
+    with_test_prefix "tstart_tstop" {
+	global decimal hex
+
+	if [mi_gdb_start] {
+	    return
+	}
+	mi_run_to_main
+
+	mi_gdb_test "-break-insert -a main" {.*\^done,bkpt=.*} \
+	    "insert tracepoint on main"
+
+	# No =trace-started notification.
+	mi_gdb_test "-trace-start" "-trace-start\r\n=breakpoint-modified\[^\n\]+\r\n\\^done" \
+	    "start trace without notification"
+	mi_gdb_test "-trace-stop" \
+	    "-trace-stop\r\n\\^done,stop-reason=\"request\".*" \
+	    "stop trace without notification"
+
+	mi_gdb_test "tstart" \
+	    ".*=trace-started.*\\^done" "start trace notification"
+	mi_gdb_test "tstop" ".*=trace-stopped\\\\n\r\n\\^done" \
+	    "stop trace notification"
+
+	mi_gdb_exit
+    }
+}
+
+test_normal_tstart_stop
+
+return 0

@@ -104,6 +104,8 @@ show range-stepping
 
   ** The -trace-save MI command can optionally save trace buffer in Common
      Trace Format now.
+  ** The start and stop of trace are now notified using new async records
+     "=trace-started" and "=trace-stopped".
 
   ** The new command -dprintf-insert sets a dynamic printf breakpoint.
 
