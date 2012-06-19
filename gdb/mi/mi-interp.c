@@ -64,6 +64,7 @@ static void mi_inferior_appeared (struct inferior *inf);
 static void mi_inferior_exit (struct inferior *inf);
 static void mi_inferior_removed (struct inferior *inf);
 static void mi_on_resume (ptid_t ptid);
+static void mi_trace_changed (int started);
 static void mi_solib_loaded (struct so_list *solib);
 static void mi_solib_unloaded (struct so_list *solib);
 static void mi_about_to_proceed (void);
@@ -129,6 +130,7 @@ mi_interpreter_init (struct interp *interp, int top_level)
       observer_attach_record_changed (mi_record_changed);
       observer_attach_normal_stop (mi_on_normal_stop);
       observer_attach_target_resumed (mi_on_resume);
+      observer_attach_trace_changed (mi_trace_changed);
       observer_attach_solib_loaded (mi_solib_loaded);
       observer_attach_solib_unloaded (mi_solib_unloaded);
       observer_attach_about_to_proceed (mi_about_to_proceed);
@@ -583,6 +585,26 @@ mi_tsv_modified (const struct trace_state_variable *tsv)
     ui_out_field_string (mi_uiout, "current", plongest (tsv->value));
 
   ui_out_redirect (mi_uiout, NULL);
+
+  gdb_flush (mi->event_channel);
+}
+
+/* Emit notification on trace was started or stopped.  */
+
+static void
+mi_trace_changed (int started)
+{
+  struct mi_interp *mi = top_level_interpreter_data ();
+
+  if (mi_suppress_notification.trace)
+    return;
+
+  target_terminal_ours ();
+
+  if (started)
+    fprintf_unfiltered (mi->event_channel, "trace-started\n");
+  else
+    fprintf_unfiltered (mi->event_channel, "trace-stopped\n");
 
   gdb_flush (mi->event_channel);
 }

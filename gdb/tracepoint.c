@@ -1901,6 +1901,8 @@ start_tracing (char *notes)
   /* Now insert traps and begin collecting data.  */
   target_trace_start ();
 
+  observer_notify_trace_changed (1);
+
   /* Reset our local state.  */
   trace_reset_local_state ();
   current_trace_status()->running = 1;
@@ -1983,6 +1985,8 @@ stop_tracing (char *note)
 
   /* Should change in response to reply?  */
   current_trace_status ()->running = 0;
+
+  observer_notify_trace_changed (0);
 }
 
 /* tstatus command */

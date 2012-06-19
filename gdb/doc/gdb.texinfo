@@ -29225,6 +29225,10 @@ written in an inferior.  The @var{id} is the identifier of the
 thread group corresponding to the affected inferior.  The optional
 @code{type="code"} part is reported if the memory written to holds
 executable code.
+
+@item =trace-started
+@itemx =trace-stopped
+Reports that trace was started or stopped.
 @end table
 
 @node GDB/MI Breakpoint Information
