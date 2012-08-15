@@ -20,6 +20,7 @@
 #include "server.h"
 #include "gdbthread.h"
 #include "agent.h"
+#include "notif.h"
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
@@ -117,122 +118,18 @@ static ptid_t last_ptid;
 static char *own_buf;
 static unsigned char *mem_buf;
 
-/* Structure holding information relative to a single stop reply.  We
-   keep a queue of these (really a singly-linked list) to push to GDB
-   in non-stop mode.  */
-struct vstop_notif
+static void
+notif_reply_stop (struct notif_reply *reply, char *own_buf)
 {
-  /* Pointer to next in list.  */
-  struct vstop_notif *next;
+  struct vstop_notif *vstop = (struct vstop_notif *) reply;
 
-  /* Thread or process that got the event.  */
-  ptid_t ptid;
+  prepare_resume_reply (own_buf, reply->ptid, &vstop->status);
+}
 
-  /* Event info.  */
-  struct target_waitstatus status;
+struct notif notif_stop =
+{
+  "vStopped", "Stop", NOTIF_STOP, NULL, notif_reply_stop,
 };
-
-/* The pending stop replies list head.  */
-static struct vstop_notif *notif_queue = NULL;
-
-/* Put a stop reply to the stop reply queue.  */
-
-static void
-queue_stop_reply (ptid_t ptid, struct target_waitstatus *status)
-{
-  struct vstop_notif *new_notif;
-
-  new_notif = xmalloc (sizeof (*new_notif));
-  new_notif->next = NULL;
-  new_notif->ptid = ptid;
-  new_notif->status = *status;
-
-  if (notif_queue)
-    {
-      struct vstop_notif *tail;
-      for (tail = notif_queue;
-	   tail && tail->next;
-	   tail = tail->next)
-	;
-      tail->next = new_notif;
-    }
-  else
-    notif_queue = new_notif;
-
-  if (remote_debug)
-    {
-      int i = 0;
-      struct vstop_notif *n;
-
-      for (n = notif_queue; n; n = n->next)
-	i++;
-
-      fprintf (stderr, "pending stop replies: %d\n", i);
-    }
-}
-
-/* Place an event in the stop reply queue, and push a notification if
-   we aren't sending one yet.  */
-
-void
-push_event (ptid_t ptid, struct target_waitstatus *status)
-{
-  gdb_assert (status->kind != TARGET_WAITKIND_IGNORE);
-
-  queue_stop_reply (ptid, status);
-
-  /* If this is the first stop reply in the queue, then inform GDB
-     about it, by sending a Stop notification.  */
-  if (notif_queue->next == NULL)
-    {
-      char *p = own_buf;
-      strcpy (p, "Stop:");
-      p += strlen (p);
-      prepare_resume_reply (p,
-			    notif_queue->ptid, &notif_queue->status);
-      putpkt_notif (own_buf);
-    }
-}
-
-/* Get rid of the currently pending stop replies for PID.  If PID is
-   -1, then apply to all processes.  */
-
-static void
-discard_queued_stop_replies (int pid)
-{
-  struct vstop_notif *prev = NULL, *reply, *next;
-
-  for (reply = notif_queue; reply; reply = next)
-    {
-      next = reply->next;
-
-      if (pid == -1
-	  || ptid_get_pid (reply->ptid) == pid)
-	{
-	  if (reply == notif_queue)
-	    notif_queue = next;
-	  else
-	    prev->next = reply->next;
-
-	  free (reply);
-	}
-      else
-	prev = reply;
-    }
-}
-
-/* If there are more stop replies to push, push one now.  */
-
-static void
-send_next_stop_reply (char *own_buf)
-{
-  if (notif_queue)
-    prepare_resume_reply (own_buf,
-			  notif_queue->ptid,
-			  &notif_queue->status);
-  else
-    write_ok (own_buf);
-}
 
 static int
 target_running (void)
@@ -2160,7 +2057,8 @@ handle_v_kill (char *own_buf)
       last_status.kind = TARGET_WAITKIND_SIGNALLED;
       last_status.value.sig = GDB_SIGNAL_KILL;
       last_ptid = pid_to_ptid (pid);
-      discard_queued_stop_replies (pid);
+
+      notif_queued_replies_discard_all (pid);
       write_ok (own_buf);
       return 1;
     }
@@ -2169,29 +2067,6 @@ handle_v_kill (char *own_buf)
       write_enn (own_buf);
       return 0;
     }
-}
-
-/* Handle a 'vStopped' packet.  */
-static void
-handle_v_stopped (char *own_buf)
-{
-  /* If we're waiting for GDB to acknowledge a pending stop reply,
-     consider that done.  */
-  if (notif_queue)
-    {
-      struct vstop_notif *head;
-
-      if (remote_debug)
-	fprintf (stderr, "vStopped: acking %s\n",
-		 target_pid_to_str (notif_queue->ptid));
-
-      head = notif_queue;
-      notif_queue = notif_queue->next;
-      free (head);
-    }
-
-  /* Push another stop reply, or if there are no more left, an OK.  */
-  send_next_stop_reply (own_buf);
 }
 
 /* Handle all of the extended 'v' packets.  */
@@ -2254,11 +2129,8 @@ handle_v_requests (char *own_buf, int packet_len, int *new_packet_len)
       return;
     }
 
-  if (strncmp (own_buf, "vStopped", 8) == 0)
-    {
-      handle_v_stopped (own_buf);
-      return;
-    }
+  if (handle_notif_ack (own_buf))
+    return;
 
   /* Otherwise we didn't know what packet it was.  Say we didn't
      understand it.  */
@@ -2340,14 +2212,20 @@ queue_stop_reply_callback (struct inferior_list_entry *entry, void *arg)
      manage the thread's last_status field.  */
   if (the_target->thread_stopped == NULL)
     {
+      struct vstop_notif *new_notif = xmalloc (sizeof (*new_notif));
+
+      new_notif->base.ptid = entry->id;
+      new_notif->status = thread->last_status;
       /* Pass the last stop reply back to GDB, but don't notify
 	 yet.  */
-      queue_stop_reply (entry->id, &thread->last_status);
+      notif_reply_enque (&notif_stop, (struct notif_reply *) new_notif);
     }
   else
     {
       if (thread_stopped (thread))
 	{
+	  struct vstop_notif *new_notif = xmalloc (sizeof (*new_notif));
+
 	  if (debug_threads)
 	    fprintf (stderr,
 		     "Reporting thread %s as already stopped with %s\n",
@@ -2356,9 +2234,11 @@ queue_stop_reply_callback (struct inferior_list_entry *entry, void *arg)
 
 	  gdb_assert (thread->last_status.kind != TARGET_WAITKIND_IGNORE);
 
+	  new_notif->base.ptid = entry->id;
+	  new_notif->status = thread->last_status;
 	  /* Pass the last stop reply back to GDB, but don't notify
 	     yet.  */
-	  queue_stop_reply (entry->id, &thread->last_status);
+	  notif_reply_enque (&notif_stop, (struct notif_reply *) new_notif);
 	}
     }
 
@@ -2417,13 +2297,13 @@ handle_status (char *own_buf)
 
   if (non_stop)
     {
-      discard_queued_stop_replies (-1);
+      notif_queued_replies_discard (-1, &notif_stop);
       find_inferior (&all_threads, queue_stop_reply_callback, NULL);
 
       /* The first is sent immediatly.  OK is sent if there is no
 	 stopped thread, which is the same handling of the vStopped
 	 packet (by design).  */
-      send_next_stop_reply (own_buf);
+      notif_send_reply (&notif_stop, own_buf);
     }
   else
     {
@@ -2516,7 +2396,7 @@ kill_inferior_callback (struct inferior_list_entry *entry)
   int pid = ptid_get_pid (process->head.id);
 
   kill_inferior (pid);
-  discard_queued_stop_replies (pid);
+  notif_queued_replies_discard_all (pid);
 }
 
 /* Callback for for_each_inferior to detach or kill the inferior,
@@ -2535,7 +2415,7 @@ detach_or_kill_inferior_callback (struct inferior_list_entry *entry)
   else
     kill_inferior (pid);
 
-  discard_queued_stop_replies (pid);
+  notif_queued_replies_discard_all (pid);
 }
 
 /* for_each_inferior callback for detach_or_kill_for_exit to print
@@ -2791,6 +2671,8 @@ main (int argc, char *argv[])
       last_status.value.integer = 0;
       last_ptid = minus_one_ptid;
     }
+
+  initialize_notif ();
 
   /* Don't report shared library events on the initial connection,
      even if some libraries are preloaded.  Avoids the "stopped by
@@ -3062,7 +2944,7 @@ process_serial_event (void)
 	write_enn (own_buf);
       else
 	{
-	  discard_queued_stop_replies (pid);
+	  notif_queued_replies_discard_all (pid);
 	  write_ok (own_buf);
 
 	  if (extended_protocol)
@@ -3404,7 +3286,7 @@ process_serial_event (void)
     {
       /* In non-stop, defer exiting until GDB had a chance to query
 	 the whole vStopped list (until it gets an OK).  */
-      if (!notif_queue)
+      if (notif_queued_replies_empty_p ())
 	{
 	  fprintf (stderr, "GDBserver exiting\n");
 	  remote_close ();
@@ -3444,6 +3326,17 @@ handle_target_event (int err, gdb_client_data client_data)
 {
   if (debug_threads)
     fprintf (stderr, "handling possible target event\n");
+
+  /* Process notifications except Stop notification.   */
+  while (!QUEUE_is_empty (notif_p, notif_queue))
+    {
+      struct notif *np = QUEUE_deque (notif_p, notif_queue);
+
+      if (np == &notif_stop)
+	break;
+
+      notif_process (np, own_buf, last_status, last_ptid);
+    }
 
   last_ptid = mywait (minus_one_ptid, &last_status,
 		      TARGET_WNOHANG, 1);
@@ -3502,8 +3395,8 @@ handle_target_event (int err, gdb_client_data client_data)
 	}
       else
 	{
-	  /* Something interesting.  Tell GDB about it.  */
-	  push_event (last_ptid, &last_status);
+	  /* Process Stop notification.  */
+	  notif_process (&notif_stop, own_buf, last_status, last_ptid);
 	}
     }
 

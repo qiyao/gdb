@@ -20,6 +20,7 @@
 #include "linux-low.h"
 #include "linux-osdata.h"
 #include "agent.h"
+#include "notif.h"
 
 #include <sys/wait.h>
 #include <stdio.h>
@@ -2802,7 +2803,11 @@ linux_wait (ptid_t ptid,
      SIGCHLD can signal more than one child stop.  */
   if (non_stop && (target_options & TARGET_WNOHANG) != 0
       && !ptid_equal (event_ptid, null_ptid))
-    async_file_mark ();
+    {
+      QUEUE_enque (notif_p, notif_queue, &notif_stop);
+
+      async_file_mark ();
+    }
 
   return event_ptid;
 }
