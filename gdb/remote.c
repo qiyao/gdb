@@ -34,6 +34,7 @@
 #include "gdb-stabs.h"
 #include "gdbthread.h"
 #include "remote.h"
+#include "remote-notif.h"
 #include "regcache.h"
 #include "value.h"
 #include "gdb_assert.h"
@@ -223,17 +224,13 @@ static void remote_check_symbols (struct objfile *objfile);
 void _initialize_remote (void);
 
 struct stop_reply;
-static struct stop_reply *stop_reply_xmalloc (void);
-static void stop_reply_xfree (struct stop_reply *);
-static void do_stop_reply_xfree (void *arg);
-static void remote_parse_stop_reply (char *buf, struct stop_reply *);
-static void push_stop_reply (struct stop_reply *);
-static void remote_get_pending_stop_replies (void);
-static void discard_pending_stop_replies (int pid);
+
 static int peek_stop_reply (ptid_t ptid);
+static void remote_parse_stop_reply (char *buf, struct stop_reply *event);
+static void notif_stop_reply_push (struct notif_stop *notif,
+				   struct notif_reply *new_event);
 
 static void remote_async_inferior_event_handler (gdb_client_data);
-static void remote_async_get_pending_events_handler (gdb_client_data);
 
 static void remote_terminal_ours (void);
 
@@ -244,11 +241,6 @@ static void remote_console_output (char *msg);
 static int remote_supports_cond_breakpoints (void);
 
 static int remote_can_run_breakpoint_commands (void);
-
-/* The non-stop remote protocol provisions for one pending stop reply.
-   This is where we keep it until it is acknowledged.  */
-
-static struct stop_reply *pending_stop_reply = NULL;
 
 /* For "remote".  */
 
@@ -1400,14 +1392,8 @@ static struct async_signal_handler *sigint_remote_token;
 /* Asynchronous signal handle registered as event loop source for
    when we have pending events ready to be passed to the core.  */
 
-static struct async_event_handler *remote_async_inferior_event_token;
+struct async_event_handler *remote_async_inferior_event_token;
 
-/* Asynchronous signal handle registered as event loop source for when
-   the remote sent us a %Stop notification.  The registered callback
-   will do a vStopped sequence to pull the rest of the events out of
-   the remote side into our event queue.  */
-
-static struct async_event_handler *remote_async_get_pending_events_token;
 
 
 static ptid_t magic_null_ptid;
@@ -3023,12 +3009,12 @@ remote_close (int quitting)
   discard_all_inferiors ();
 
   /* We're no longer interested in any of these events.  */
-  discard_pending_stop_replies (-1);
+  remote_notif_discard_replies (-1);
 
   if (remote_async_inferior_event_token)
     delete_async_event_handler (&remote_async_inferior_event_token);
-  if (remote_async_get_pending_events_token)
-    delete_async_event_handler (&remote_async_get_pending_events_token);
+
+  remote_notif_unregister_async_event_handler ();
 }
 
 /* Query the remote side for the text, data and bss offsets.  */
@@ -3450,19 +3436,12 @@ remote_start_remote (int from_tty, struct target_ops *target, int extended_p)
 	 mechanism.  */
       if (strcmp (rs->buf, "OK") != 0)
 	{
-	  struct stop_reply *stop_reply;
-	  struct cleanup *old_chain;
-
-	  stop_reply = stop_reply_xmalloc ();
-	  old_chain = make_cleanup (do_stop_reply_xfree, stop_reply);
-
-	  remote_parse_stop_reply (rs->buf, stop_reply);
-	  discard_cleanups (old_chain);
-
-	  /* get_pending_stop_replies acks this one, and gets the rest
+	  /* remote_notif_pending_replies acks this one, and gets the rest
 	     out.  */
-	  pending_stop_reply = stop_reply;
-	  remote_get_pending_stop_replies ();
+	  notif_packet_stop.base.pending_reply
+	    = remote_notif_parse ((struct notif *) &notif_packet_stop,
+				  rs->buf);
+	  remote_notif_pending_replies ((struct notif *) &notif_packet_stop);
 
 	  /* Make sure that threads that were stopped remain
 	     stopped.  */
@@ -4222,9 +4201,7 @@ remote_open_1 (char *name, int from_tty,
   remote_async_inferior_event_token
     = create_async_event_handler (remote_async_inferior_event_handler,
 				  NULL);
-  remote_async_get_pending_events_token
-    = create_async_event_handler (remote_async_get_pending_events_handler,
-				  NULL);
+  remote_notif_register_async_event_handler ();
 
   /* Reset the target state; these things will be queried either by
      remote_query_supported or as they are needed.  */
@@ -4351,7 +4328,7 @@ remote_detach_1 (char *args, int from_tty, int extended)
   if (from_tty && !extended)
     puts_filtered (_("Ending remote debugging.\n"));
 
-  discard_pending_stop_replies (pid);
+  remote_notif_discard_replies (pid);
   target_mourn_inferior ();
 }
 
@@ -4480,14 +4457,11 @@ extended_remote_attach_1 (struct target_ops *target, char *args, int from_tty)
 
       if (target_can_async_p ())
 	{
-	  struct stop_reply *stop_reply;
-	  struct cleanup *old_chain;
+	  struct notif_reply *reply
+	    =  remote_notif_parse ((struct notif *) &notif_packet_stop,
+				   wait_status);
 
-	  stop_reply = stop_reply_xmalloc ();
-	  old_chain = make_cleanup (do_stop_reply_xfree, stop_reply);
-	  remote_parse_stop_reply (wait_status, stop_reply);
-	  discard_cleanups (old_chain);
-	  push_stop_reply (stop_reply);
+	  notif_stop_reply_push (&notif_packet_stop, reply);
 
 	  target_async (inferior_event_handler, 0);
 	}
@@ -5116,9 +5090,7 @@ DEF_VEC_O(cached_reg_t);
 
 struct stop_reply
 {
-  struct stop_reply *next;
-
-  ptid_t ptid;
+  struct notif_reply base;
 
   struct target_waitstatus ws;
 
@@ -5137,73 +5109,117 @@ struct stop_reply
   int core;
 };
 
-/* The list of already fetched and acknowledged stop events.  */
-static struct stop_reply *stop_reply_queue;
-
-static struct stop_reply *
-stop_reply_xmalloc (void)
+static void
+remote_notif_parse_stop (struct notif *self, char *buf, void *data)
 {
-  struct stop_reply *r = XMALLOC (struct stop_reply);
+  remote_parse_stop_reply (buf, (struct stop_reply *) data);
+}
 
-  r->next = NULL;
+static void
+remote_notif_ack_stop (struct notif *self, char *buf, void *data)
+{
+  struct stop_reply *stop_reply = (struct stop_reply *) data;
+
+  /* acknowledge */
+  putpkt ((char *) self->ack_command);
+
+  if (stop_reply->ws.kind == TARGET_WAITKIND_IGNORE)
+      /* We got an unknown stop reply.  */
+      error (_("Unknown stop reply"));
+
+  notif_stop_reply_push ((struct notif_stop *) self,
+			   (struct notif_reply *) stop_reply);
+}
+
+static void
+stop_reply_dtr (struct notif_reply *reply)
+{
+  struct stop_reply *r = (struct stop_reply *) reply;
+
+  if (r != NULL)
+    VEC_free (cached_reg_t, r->regcache);
+}
+
+static struct notif_reply *
+remote_notif_alloc_reply_stop (void)
+{
+  struct notif_reply *r = (struct notif_reply *) XMALLOC (struct stop_reply);
+
+  r->dtr = stop_reply_dtr;
+
   return r;
 }
 
+/* Destructor of 'notif_stop' SELF.  */
+
 static void
-stop_reply_xfree (struct stop_reply *r)
+remote_notif_dtr_stop (struct notif *self)
 {
-  if (r != NULL)
-    {
-      VEC_free (cached_reg_t, r->regcache);
-      xfree (r);
-    }
+  struct notif_stop *notif = (struct notif_stop *) self;
+
+  if (notif->ack_queue != NULL)
+    QUEUE_free (notif_reply_p, notif->ack_queue);
 }
 
-/* Discard all pending stop replies of inferior PID.  If PID is -1,
-   discard everything.  */
-
-static void
-discard_pending_stop_replies (int pid)
+struct notif_stop notif_packet_stop =
 {
-  struct stop_reply *prev = NULL, *reply, *next;
+  {
+    "Stop",
+    "vStopped",
+    remote_notif_parse_stop,
+    remote_notif_ack_stop,
+    remote_notif_alloc_reply_stop,
+    remote_notif_dtr_stop,
+    NULL,
+  },
+  NULL,
+};
 
-  /* Discard the in-flight notification.  */
-  if (pending_stop_reply != NULL
-      && (pid == -1
-	  || ptid_get_pid (pending_stop_reply->ptid) == pid))
+/* A parameter to pass data in and out.  */
+
+struct queue_iter_param
+{
+  void *input;
+  struct notif_reply *output;
+};
+
+static int
+remote_notif_remove_once_on_match (QUEUE (notif_reply_p) *q,
+				   QUEUE_ITER (notif_reply_p) *iter,
+				   notif_reply_p reply,
+				   void *data)
+{
+  struct queue_iter_param *param = data;
+  ptid_t *ptid = param->input;
+
+  if (ptid_match (reply->ptid, *ptid))
     {
-      stop_reply_xfree (pending_stop_reply);
-      pending_stop_reply = NULL;
+      param->output = reply;
+      QUEUE_remove_elem (notif_reply_p, q, iter);
+      return 0;
     }
 
-  /* Discard the stop replies we have already pulled with
-     vStopped.  */
-  for (reply = stop_reply_queue; reply; reply = next)
-    {
-      next = reply->next;
-      if (pid == -1
-	  || ptid_get_pid (reply->ptid) == pid)
-	{
-	  if (reply == stop_reply_queue)
-	    stop_reply_queue = reply->next;
-	  else
-	    prev->next = reply->next;
-
-	  stop_reply_xfree (reply);
-	}
-      else
-	prev = reply;
-    }
+  return 1;
 }
 
-/* Cleanup wrapper.  */
+/* Remove the first reply in NP->ack_queue if function MATCH returns
+   true.  */
 
-static void
-do_stop_reply_xfree (void *arg)
+static struct notif_reply *
+remote_notif_discard_queued_reply (struct notif_stop *np, ptid_t ptid)
 {
-  struct stop_reply *r = arg;
+  struct queue_iter_param param;
 
-  stop_reply_xfree (r);
+  param.input = &ptid;
+  param.output = NULL;
+
+  QUEUE_iterate (notif_reply_p, np->ack_queue,
+		 remote_notif_remove_once_on_match, &param);
+
+  DEBUG_NOTIF ("discard queued reply: '%s' in %s", np->base.name,
+	       target_pid_to_str (ptid));
+
+  return param.output;
 }
 
 /* Look for a queued stop reply belonging to PTID.  If one is found,
@@ -5214,53 +5230,45 @@ do_stop_reply_xfree (void *arg)
 static struct stop_reply *
 queued_stop_reply (ptid_t ptid)
 {
-  struct stop_reply *it;
-  struct stop_reply **it_link;
+  struct notif_reply *r
+    = remote_notif_discard_queued_reply (&notif_packet_stop, ptid);
 
-  it = stop_reply_queue;
-  it_link = &stop_reply_queue;
-  while (it)
-    {
-      if (ptid_match (it->ptid, ptid))
-	{
-	  *it_link = it->next;
-	  it->next = NULL;
-	  break;
-	}
-
-      it_link = &it->next;
-      it = *it_link;
-    }
-
-  if (stop_reply_queue)
+  if (!QUEUE_is_empty (notif_reply_p, notif_packet_stop.ack_queue))
     /* There's still at least an event left.  */
     mark_async_event_handler (remote_async_inferior_event_token);
 
-  return it;
+  return (struct stop_reply *) r;
 }
 
-/* Push a fully parsed stop reply in the stop reply queue.  Since we
+/* Push a fully parsed reply in the reply queue.  Since we
    know that we now have at least one queued event left to pass to the
-   core side, tell the event loop to get back to target_wait soon.  */
+   core side, tell the event loop to get back to target_wait soon if
+   the event is about stop, otherwise don't have to back to target_wait.  */
 
 static void
-push_stop_reply (struct stop_reply *new_event)
+notif_stop_reply_push (struct notif_stop *notif,
+		       struct notif_reply *new_event)
 {
-  struct stop_reply *event;
+  QUEUE_enque (notif_reply_p, notif->ack_queue, new_event);
 
-  if (stop_reply_queue)
-    {
-      for (event = stop_reply_queue;
-	   event && event->next;
-	   event = event->next)
-	;
-
-      event->next = new_event;
-    }
-  else
-    stop_reply_queue = new_event;
+  DEBUG_NOTIF ("push '%s' %s to queue %d", notif->base.name,
+	       target_pid_to_str (new_event->ptid),
+	       QUEUE_length (notif_reply_p, notif->ack_queue));
 
   mark_async_event_handler (remote_async_inferior_event_token);
+}
+
+static int
+stop_reply_match_ptid_and_ws (QUEUE (notif_reply_p) *q,
+			      QUEUE_ITER (notif_reply_p) *iter,
+			      struct notif_reply *reply,
+			      void *data)
+{
+  ptid_t *ptid = data;
+  struct stop_reply *r = (struct stop_reply *) reply;
+
+  return !(ptid_equal (*ptid, r->base.ptid)
+	   && r->ws.kind == TARGET_WAITKIND_STOPPED);
 }
 
 /* Returns true if we have a stop reply for PTID.  */
@@ -5268,16 +5276,8 @@ push_stop_reply (struct stop_reply *new_event)
 static int
 peek_stop_reply (ptid_t ptid)
 {
-  struct stop_reply *it;
-
-  for (it = stop_reply_queue; it; it = it->next)
-    if (ptid_equal (ptid, it->ptid))
-      {
-	if (it->ws.kind == TARGET_WAITKIND_STOPPED)
-	  return 1;
-      }
-
-  return 0;
+  return !QUEUE_iterate (notif_reply_p, notif_packet_stop.ack_queue,
+			 stop_reply_match_ptid_and_ws, &ptid);
 }
 
 /* Parse the stop reply in BUF.  Either the function succeeds, and the
@@ -5290,7 +5290,7 @@ remote_parse_stop_reply (char *buf, struct stop_reply *event)
   ULONGEST addr;
   char *p;
 
-  event->ptid = null_ptid;
+  event->base.ptid = null_ptid;
   event->ws.kind = TARGET_WAITKIND_IGNORE;
   event->ws.value.integer = 0;
   event->solibs_changed = 0;
@@ -5342,7 +5342,7 @@ remote_parse_stop_reply (char *buf, struct stop_reply *event)
 Packet: '%s'\n"),
 		       p, buf);
 	      if (strncmp (p, "thread", p1 - p) == 0)
-		event->ptid = read_ptid (++p1, &p);
+		event->base.ptid = read_ptid (++p1, &p);
 	      else if ((strncmp (p, "watch", p1 - p) == 0)
 		       || (strncmp (p, "rwatch", p1 - p) == 0)
 		       || (strncmp (p, "awatch", p1 - p) == 0))
@@ -5484,21 +5484,21 @@ Packet: '%s'\n"),
 	  }
 	else
 	  error (_("unknown stop reply packet: %s"), buf);
-	event->ptid = pid_to_ptid (pid);
+	event->base.ptid = pid_to_ptid (pid);
       }
       break;
     }
 
-  if (non_stop && ptid_equal (event->ptid, null_ptid))
+  if (non_stop && ptid_equal (event->base.ptid, null_ptid))
     error (_("No process or thread specified in stop reply: %s"), buf);
 }
 
-/* When the stub wants to tell GDB about a new stop reply, it sends a
-   stop notification (%Stop).  Those can come it at any time, hence,
-   we have to make sure that any pending putpkt/getpkt sequence we're
-   making is finished, before querying the stub for more events with
-   vStopped.  E.g., if we started a vStopped sequence immediatelly
-   upon receiving the %Stop notification, something like this could
+/* When the stub wants to tell GDB about a new notification reply, it sends a
+   notification (%Stop, for example).  Those can come it at any time, hence,
+   we have to make sure that any pending putpkt/getpkt sequence we're making
+   is finished, before querying the stub for more events with the corresponding
+   ack command (vStopped, for example).  E.g., if we started a vStopped sequence
+   immediately upon receiving the notification, something like this could
    happen:
 
     1.1) --> Hg 1
@@ -5534,19 +5534,17 @@ Packet: '%s'\n"),
     2.9) --> OK
 */
 
-static void
-remote_get_pending_stop_replies (void)
+void
+remote_notif_pending_replies (struct notif *np)
 {
   struct remote_state *rs = get_remote_state ();
 
-  if (pending_stop_reply)
+  if (np->pending_reply)
     {
+      DEBUG_NOTIF ("process: '%s' ack pending reply", np->name);
       /* acknowledge */
-      putpkt ("vStopped");
-
-      /* Now we can rely on it.	 */
-      push_stop_reply (pending_stop_reply);
-      pending_stop_reply = NULL;
+      np->ack (np, rs->buf, np->pending_reply);
+      np->pending_reply = NULL;
 
       while (1)
 	{
@@ -5554,30 +5552,14 @@ remote_get_pending_stop_replies (void)
 	  if (strcmp (rs->buf, "OK") == 0)
 	    break;
 	  else
-	    {
-	      struct cleanup *old_chain;
-	      struct stop_reply *stop_reply = stop_reply_xmalloc ();
-
-	      old_chain = make_cleanup (do_stop_reply_xfree, stop_reply);
-	      remote_parse_stop_reply (rs->buf, stop_reply);
-
-	      /* acknowledge */
-	      putpkt ("vStopped");
-
-	      if (stop_reply->ws.kind != TARGET_WAITKIND_IGNORE)
-		{
-		  /* Now we can rely on it.  */
-		  discard_cleanups (old_chain);
-		  push_stop_reply (stop_reply);
-		}
-	      else
-		/* We got an unknown stop reply.  */
-		do_cleanups (old_chain);
-	    }
+	    remote_notif_ack (np, rs->buf);
 	}
     }
+  else
+    {
+      DEBUG_NOTIF ("process: '%s' no pending reply", np->name);
+    }
 }
-
 
 /* Called when it is decided that STOP_REPLY holds the info of the
    event that is to be returned to the core.  This function always
@@ -5590,7 +5572,7 @@ process_stop_reply (struct stop_reply *stop_reply,
   ptid_t ptid;
 
   *status = stop_reply->ws;
-  ptid = stop_reply->ptid;
+  ptid = stop_reply->base.ptid;
 
   /* If no thread/process was reported by the stub, assume the current
      inferior.  */
@@ -5622,7 +5604,7 @@ process_stop_reply (struct stop_reply *stop_reply,
       demand_private_info (ptid)->core = stop_reply->core;
     }
 
-  stop_reply_xfree (stop_reply);
+  notif_reply_xfree ((struct notif_reply *) stop_reply);
   return ptid;
 }
 
@@ -5661,8 +5643,8 @@ remote_wait_ns (ptid_t ptid, struct target_waitstatus *status, int options)
 
       /* Acknowledge a pending stop reply that may have arrived in the
 	 mean time.  */
-      if (pending_stop_reply != NULL)
-	remote_get_pending_stop_replies ();
+      if (notif_packet_stop.base.pending_reply != NULL)
+	remote_notif_pending_replies ((struct notif *) &notif_packet_stop);
 
       /* If indeed we noticed a stop reply, we're done.  */
       stop_reply = queued_stop_reply (ptid);
@@ -5758,14 +5740,11 @@ remote_wait_as (ptid_t ptid, struct target_waitstatus *status, int options)
       break;
     case 'T': case 'S': case 'X': case 'W':
       {
-	struct stop_reply *stop_reply;
-	struct cleanup *old_chain;
+	struct notif_reply *reply
+	  = remote_notif_parse ((struct notif *) &notif_packet_stop,
+				rs->buf);
 
-	stop_reply = stop_reply_xmalloc ();
-	old_chain = make_cleanup (do_stop_reply_xfree, stop_reply);
-	remote_parse_stop_reply (buf, stop_reply);
-	discard_cleanups (old_chain);
-	event_ptid = process_stop_reply (stop_reply, status);
+	event_ptid = process_stop_reply ((struct stop_reply *) reply, status);
 	break;
       }
     case 'O':		/* Console output.  */
@@ -5845,7 +5824,7 @@ remote_wait (struct target_ops *ops,
     {
       /* If there are are events left in the queue tell the event loop
 	 to return here.  */
-      if (stop_reply_queue)
+      if (!QUEUE_is_empty (notif_reply_p, notif_packet_stop.ack_queue))
 	mark_async_event_handler (remote_async_inferior_event_token);
     }
 
@@ -6740,52 +6719,6 @@ remote_read_bytes (CORE_ADDR memaddr, gdb_byte *myaddr, int len)
   /* Return what we have.  Let higher layers handle partial reads.  */
   return i;
 }
-
-
-/* Remote notification handler.  */
-
-static void
-handle_notification (char *buf)
-{
-  if (strncmp (buf, "Stop:", 5) == 0)
-    {
-      if (pending_stop_reply)
-	{
-	  /* We've already parsed the in-flight stop-reply, but the
-	     stub for some reason thought we didn't, possibly due to
-	     timeout on its side.  Just ignore it.  */
-	  if (remote_debug)
-	    fprintf_unfiltered (gdb_stdlog, "ignoring resent notification\n");
-	}
-      else
-	{
-	  struct cleanup *old_chain;
-	  struct stop_reply *reply = stop_reply_xmalloc ();
-
-	  old_chain = make_cleanup (do_stop_reply_xfree, reply);
-
-	  remote_parse_stop_reply (buf + 5, reply);
-
-	  discard_cleanups (old_chain);
-
-	  /* Be careful to only set it after parsing, since an error
-	     may be thrown then.  */
-	  pending_stop_reply = reply;
-
-	  /* Notify the event loop there's a stop reply to acknowledge
-	     and that there may be more events to fetch.  */
-	  mark_async_event_handler (remote_async_get_pending_events_token);
-
-	  if (remote_debug)
-	    fprintf_unfiltered (gdb_stdlog, "stop notification captured\n");
-	}
-    }
-  else
-    {
-      /* We ignore notifications we don't recognize, for compatibility
-	 with newer stubs.  */
-    }
-}
 
 
 /* Read or write LEN bytes from inferior memory at MEMADDR,
@@ -7657,7 +7590,7 @@ extended_remote_mourn_1 (struct target_ops *target)
   rs->waiting_for_stop_reply = 0;
 
   /* We're no longer interested in these events.  */
-  discard_pending_stop_replies (ptid_get_pid (inferior_ptid));
+  remote_notif_discard_replies (ptid_get_pid (inferior_ptid));
 
   /* If the current general thread belonged to the process we just
      detached from or has exited, the remote side current general
@@ -11186,12 +11119,6 @@ static void
 remote_async_inferior_event_handler (gdb_client_data data)
 {
   inferior_event_handler (INF_REG_EVENT, NULL);
-}
-
-static void
-remote_async_get_pending_events_handler (gdb_client_data data)
-{
-  remote_get_pending_stop_replies ();
 }
 
 static void

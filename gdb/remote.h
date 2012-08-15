@@ -19,6 +19,9 @@
 #ifndef REMOTE_H
 #define REMOTE_H
 
+#include "target.h"
+#include "remote-notif.h"
+
 struct target_desc;
 
 /* Read a packet from the remote machine, with error checking, and
@@ -40,6 +43,7 @@ extern int putpkt (char *buf);
 extern char *unpack_varlen_hex (char *buff, ULONGEST *result);
 
 extern void async_remote_interrupt_twice (void *arg);
+extern struct async_event_handler *remote_async_inferior_event_token;
 
 void register_remote_g_packet_guess (struct gdbarch *gdbarch, int bytes,
 				     const struct target_desc *tdesc);
@@ -59,4 +63,5 @@ extern int remote_register_number_and_offset (struct gdbarch *gdbarch,
 					      int regnum, int *pnum,
 					      int *poffset);
 
+extern void remote_notif_pending_replies (struct notif *np);;
 #endif
