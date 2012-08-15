@@ -20,6 +20,7 @@
 #include "linux-low.h"
 #include "linux-osdata.h"
 #include "agent.h"
+#include "notif.h"
 
 #include <sys/wait.h>
 #include <stdio.h>
