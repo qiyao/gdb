@@ -4335,6 +4335,12 @@ linux_fetch_registers (struct regcache *regcache, int regno)
   int use_regsets;
   int all = 0;
 
+  /* Only for test.  */
+  if (notif_test.queue != NULL)
+    notif_process (&notif_test,
+		   ((struct inferior_list_entry *)current_inferior)->id,
+		   NULL);
+
   if (regno == -1)
     {
       if (the_low_target.fetch_register != NULL)

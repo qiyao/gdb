@@ -41,7 +41,7 @@ struct vstop_notif
   struct target_waitstatus status;
 };
 
-enum notif_type { NOTIF_STOP };
+enum notif_type { NOTIF_STOP, NOTIF_TEST };
 
 /* A type notification to GDB.  An object of 'struct notif' represents
    a type of notification.  */
@@ -78,6 +78,7 @@ void notif_queued_replies_discard_all (int pid);
 void notif_process (struct notif *np, ptid_t ptid, void *data);
 void notif_reply_enque (struct notif *notif, struct notif_reply *reply);
 
+extern struct notif notif_test;
 DECLARE_QUEUE_P (notif_reply_p);
 
 void initialize_notif (void);
