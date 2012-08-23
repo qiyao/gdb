@@ -42,7 +42,7 @@ struct vstop_notif
   struct target_waitstatus status;
 };
 
-enum notif_type { NOTIF_STOP };
+enum notif_type { NOTIF_STOP, NOTIF_TEST };
 
 /* A notification to GDB.  */
 
@@ -77,6 +77,7 @@ void notif_process (struct notif *np, char *buf,
 		    struct target_waitstatus status, ptid_t ptid);
 void notif_reply_enque (struct notif *notif, struct notif_reply *reply);
 
+extern struct notif notif_test;
 extern QUEUE (notif_p) *notif_queue;
 
 DECLARE_QUEUE_P (notif_p);

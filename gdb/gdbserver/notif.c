@@ -19,9 +19,21 @@
 
 #include "notif.h"
 
+static void
+notif_reply_test (struct notif_reply *reply, char *own_buf)
+{
+  strcpy (own_buf, "CESHI");
+}
+
+struct notif notif_test =
+{
+  "vTested", "NTest", NOTIF_TEST, NULL, notif_reply_test
+};
+
 static struct notif *notif_packets [] =
 {
   &notif_stop,
+  &notif_test,
   NULL,
 };
 
@@ -113,6 +125,9 @@ notif_process (struct notif *np, char *buf,
 	vstop_notif->status = status;
 	new_notif = (struct notif_reply *) vstop_notif;
       }
+      break;
+    case NOTIF_TEST:
+      new_notif = xmalloc (sizeof (struct notif_reply));
       break;
     default:
       error ("Unknown notification type");

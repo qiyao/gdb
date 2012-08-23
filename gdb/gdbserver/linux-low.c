@@ -4334,6 +4334,13 @@ linux_fetch_registers (struct regcache *regcache, int regno)
   int use_regsets;
   int all = 0;
 
+  if (notif_queue != NULL)
+    {
+      /* Only for test.  */
+      QUEUE_enque (notif_p, notif_queue, &notif_test);
+      async_file_mark ();
+    }
+
   if (regno == -1)
     {
       if (the_low_target.fetch_register != NULL)

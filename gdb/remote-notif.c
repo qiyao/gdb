@@ -29,11 +29,52 @@
 
 int notif_debug = 0;
 
+struct test_reply
+{
+  struct notif_reply base;
+};
+
+static void
+remote_notif_parse_test (struct notif *self, char *buf, void *data)
+{
+  if (strncmp (buf, "CESHI", 5) != 0)
+    error (_("'CESHI' is expected"));
+}
+
+static void
+remote_notif_ack_test (struct notif *self, char *buf, void *data)
+{
+  struct notif_reply *reply = (struct notif_reply *) data;
+
+  /* acknowledge */
+  putpkt ((char *) self->ack_command);
+}
+
+static struct notif_reply *
+remote_notif_alloc_reply_test (void)
+{
+  struct notif_reply *reply = xmalloc (sizeof (struct test_reply));
+
+  reply->dtr = NULL;
+
+  return reply;
+}
+
+static struct notif notif_packet_test =
+{
+  "NTest", "vTested",
+  remote_notif_parse_test,
+  remote_notif_ack_test,
+  remote_notif_alloc_reply_test,
+  NULL, NULL,
+};
+
 /* Supported notifications.  */
 
 static struct notif *notifs[] =
 {
   (struct notif *) &notif_packet_stop,
+  &notif_packet_test,
 };
 
 static void do_notif_reply_xfree (void *arg);
