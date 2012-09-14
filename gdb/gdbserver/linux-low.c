@@ -264,9 +264,6 @@ static int num_regsets;
    event loop.  */
 static int linux_event_pipe[2] = { -1, -1 };
 
-/* True if we're currently in async mode.  */
-#define target_is_async_p() (linux_event_pipe[0] != -1)
-
 static void send_sigstop (struct lwp_info *lwp);
 static void wait_for_sigstop (struct inferior_list_entry *entry);
 
@@ -2797,15 +2794,13 @@ linux_wait (ptid_t ptid,
     fprintf (stderr, "linux_wait: [%s]\n", target_pid_to_str (ptid));
 
   /* Flush the async file first.  */
-  if (target_is_async_p ())
-    async_file_flush ();
+  async_file_flush ();
 
   event_ptid = linux_wait_1 (ptid, ourstatus, target_options);
 
   /* If at least one stop was reported, there may be more.  A single
      SIGCHLD can signal more than one child stop.  */
-  if (target_is_async_p ()
-      && (target_options & TARGET_WNOHANG) != 0
+  if (non_stop && (target_options & TARGET_WNOHANG) != 0
       && !ptid_equal (event_ptid, null_ptid))
     async_file_mark ();
 
@@ -4962,7 +4957,7 @@ sigchld_handler (int signo)
 	} while (0);
     }
 
-  if (target_is_async_p ())
+  if (non_stop)
     async_file_mark (); /* trigger a linux_wait */
 
   errno = old_errno;
@@ -5025,8 +5020,6 @@ linux_async (int enable)
 static int
 linux_start_non_stop (int nonstop)
 {
-  /* Register or unregister from event-loop accordingly.  */
-  linux_async (nonstop);
   return 0;
 }
 
@@ -5889,4 +5882,6 @@ initialize_low (void)
   sigemptyset (&sigchld_action.sa_mask);
   sigchld_action.sa_flags = SA_RESTART;
   sigaction (SIGCHLD, &sigchld_action, NULL);
+
+  linux_async (1);
 }

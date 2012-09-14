@@ -211,7 +211,7 @@ handle_accept_event (int err, gdb_client_data client_data)
      try to send vStopped notifications to GDB.  But, don't do that
      until GDB as selected all-stop/non-stop, and has queried the
      threads' status ('?').  */
-  target_async (0);
+  non_stop = 0;
 
   return 0;
 }
