@@ -933,7 +933,6 @@ static struct target_ops nto_target_ops = {
   NULL, /* nto_qxfer_osdata */
   NULL, /* xfer_siginfo */
   nto_supports_non_stop,
-  NULL, /* async */
   NULL  /* start_non_stop */
 };
 

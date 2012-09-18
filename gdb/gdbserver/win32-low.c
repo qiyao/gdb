@@ -1806,7 +1806,6 @@ static struct target_ops win32_target_ops = {
   NULL, /* qxfer_osdata */
   NULL, /* qxfer_siginfo */
   NULL, /* supports_non_stop */
-  NULL, /* async */
   NULL, /* start_non_stop */
   NULL, /* supports_multi_process */
   NULL, /* handle_monitor_command */

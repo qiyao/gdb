@@ -292,10 +292,6 @@ struct target_ops
 
   int (*supports_non_stop) (void);
 
-  /* Enables async target events.  Returns the previous enable
-     state.  */
-  int (*async) (int enable);
-
   /* Switch to non-stop (1) or all-stop (0) mode.  Return 0 on
      success, -1 otherwise.  */
   int (*start_non_stop) (int);
@@ -431,9 +427,6 @@ int kill_inferior (int);
 
 #define target_supports_non_stop() \
   (the_target->supports_non_stop ? (*the_target->supports_non_stop ) () : 0)
-
-#define target_async(enable) \
-  (the_target->async ? (*the_target->async) (enable) : 0)
 
 #define target_supports_multi_process() \
   (the_target->supports_multi_process ? \

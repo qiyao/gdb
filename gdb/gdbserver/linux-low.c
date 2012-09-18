@@ -5823,7 +5823,6 @@ static struct target_ops linux_target_ops = {
   linux_qxfer_osdata,
   linux_xfer_siginfo,
   linux_supports_non_stop,
-  linux_async,
   linux_start_non_stop,
   linux_supports_multi_process,
 #ifdef USE_THREAD_DB
