@@ -23,6 +23,7 @@
 #include "event-loop.h"
 #include "target.h"
 #include "inferior.h"
+#include "gdbcmd.h"
 
 #include <string.h>
 
@@ -326,4 +327,13 @@ _initialize_notif (void)
   notif_packet_stop.ack_queue = QUEUE_alloc (notif_reply_p, notif_reply_xfree);
 
   notif_queue = QUEUE_alloc (notif_p, notif_xfree);
+
+  add_setshow_zinteger_cmd ("notification", no_class, &notif_debug, _("\
+Set debugging of async remote notification."), _("\
+Show debugging of async remote notification."), _("\
+When non-zero, async remote notification specific"
+" internal debugging is enabled."),
+			    NULL,
+			    NULL,
+			    &setdebuglist, &showdebuglist);
 }
