@@ -46,6 +46,10 @@ pi [command]
 py [command]
   "py" is a new alias for "python".
 
+set debug notification
+show debug notification
+  Control display of debugging info for async remote notification.
+
 * Removed commands
 
   ** For the Renesas Super-H architecture, the "regs" command has been removed
