@@ -113,6 +113,7 @@ remote_notif_process (struct notif *except)
 static void
 remote_async_get_pending_events_handler (gdb_client_data data)
 {
+  gdb_assert (non_stop);
   remote_notif_process (NULL);
 }
 
@@ -182,7 +183,8 @@ handle_notification (char *buf)
       /* Notify the event loop there's a stop reply to acknowledge
 	 and that there may be more events to fetch.  */
       QUEUE_enque (notif_p, notif_queue, np);
-      mark_async_event_handler (remote_async_get_pending_events_token);
+      if (non_stop)
+	mark_async_event_handler (remote_async_get_pending_events_token);
 
       DEBUG_NOTIF ("Notification '%s' captured", np->name);
     }
