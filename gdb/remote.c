@@ -5708,7 +5708,7 @@ remote_wait_as (ptid_t ptid, struct target_waitstatus *status, int options)
 	 _never_ wait for ever -> test on target_is_async_p().
 	 However, before we do that we need to ensure that the caller
 	 knows how to take the target into/out of async mode.  */
-      ret = getpkt_sane (&rs->buf, &rs->buf_size, wait_forever_enabled_p);
+      ret = getpkt_or_notif_sane (&rs->buf, &rs->buf_size, wait_forever_enabled_p);
       if (!target_is_async_p ())
 	signal (SIGINT, ofunc);
     }
@@ -5753,6 +5753,11 @@ remote_wait_as (ptid_t ptid, struct target_waitstatus *status, int options)
       /* The target didn't really stop; keep waiting.  */
       rs->waiting_for_stop_reply = 1;
 
+      break;
+    case 'N':
+      handle_notification (rs->buf);
+      /* The target didn't really stop; keep waiting.  */
+      rs->waiting_for_stop_reply = 1;
       break;
     case '\0':
       if (last_sent_signal != GDB_SIGNAL_0)
