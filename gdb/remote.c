@@ -4755,6 +4755,10 @@ remote_resume (struct target_ops *ops,
   struct remote_state *rs = get_remote_state ();
   char *buf;
 
+  /* Clean up pending queues before resume.  */
+  if (!non_stop)
+    remote_notif_process ((struct notif *) &notif_packet_stop);
+
   last_sent_signal = siggnal;
   last_sent_step = step;
 
