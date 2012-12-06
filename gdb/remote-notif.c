@@ -49,6 +49,7 @@ int notif_debug = 0;
 static struct notif_client *notifs[] =
 {
   &notif_client_stop,
+  &notif_client_trace,
 };
 
 static void do_notif_event_xfree (void *arg);
