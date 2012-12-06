@@ -52,6 +52,7 @@
 static struct notif_server *notifs[] =
 {
   &notif_stop,
+  &notif_trace,
 };
 
 /* Helper function to write EVENT of NOTIF to buffer OWN_BUF.  */

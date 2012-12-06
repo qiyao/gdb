@@ -37904,6 +37904,8 @@ for success (@pxref{Stop Reply Packets})
 
 @item vStopped
 @cindex @samp{vStopped} packet
+@itemx vTraced
+@cindex @samp{vTraced} packet
 @xref{Notification Packets}.
 
 @item X @var{addr},@var{length}:@var{XX@dots{}}
@@ -39928,6 +39930,7 @@ continue the tracing run, while 0 tells the target to stop tracing if
 @value{GDBN} is no longer in the picture.
 
 @item qTStatus
+@anchor{qTStatus packet}
 @cindex @samp{qTStatus} packet
 Ask the stub if there is a trace experiment running right now.
 
@@ -40461,6 +40464,13 @@ described in @ref{Stop Reply Packets}.  Refer to @ref{Remote Non-Stop},
 for information on how these notifications are acknowledged by 
 @value{GDBN}.
 @tab Report an asynchronous stop event in non-stop mode.
+
+@item Trace
+@tab vTraced
+@tab @code{status}
+@tab @var{reply}.  The @var{reply} has the form of the reply to packet
+@samp{qTStatus}, as described in @ref{qTStatus packet}.
+@tab Report an asynchronous trace-related event.
 
 @end multitable
 

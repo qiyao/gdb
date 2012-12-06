@@ -57,6 +57,7 @@ typedef struct notif_server
 } *notif_server_p;
 
 extern struct notif_server notif_stop;
+extern struct notif_server notif_trace;
 
 int handle_notif_ack (char *own_buf, int packet_len);
 void notif_write_event (struct notif_server *notif, char *own_buf);

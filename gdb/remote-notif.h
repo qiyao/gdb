@@ -96,6 +96,7 @@ void remote_notif_qsupported_reply (const char *reply,
 				    struct remote_notif_state *state);
 
 extern struct notif_client notif_client_stop;
+extern struct notif_client notif_client_trace;
 
 extern int notif_debug;
 

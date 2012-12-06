@@ -3381,6 +3381,32 @@ cmd_qtstart (char *packet)
   write_ok (packet);
 }
 
+#ifndef IN_PROCESS_AGENT
+#include "notif.h"
+
+static void cmd_qtstatus (char *packet);
+
+static void
+notif_reply_trace (struct notif_event *event, char *own_buf)
+{
+  cmd_qtstatus (own_buf);
+}
+
+#define NOTIF_ANNEX_TRACE_STATUS 0
+
+static struct notif_annex notif_annex_trace[] =
+{
+  { "status", 0, notif_reply_trace, },
+  { NULL, 0, NULL, },
+};
+
+struct notif_server notif_trace =
+{
+  { "Trace", "vTraced", notif_annex_trace, }, NULL,
+};
+
+#endif
+
 /* End a tracing run, filling in a stop reason to report back to GDB,
    and removing the tracepoints from the code.  */
 
@@ -3481,6 +3507,16 @@ stop_tracing (void)
     }
 
   unpause_all (1);
+
+  if (NOTIF_ANNEX_SUPPORTED (UNUSED, &notif_trace.base,
+			     NOTIF_ANNEX_TRACE_STATUS))
+    {
+      struct notif_annex_event *event
+	= xmalloc (sizeof (struct notif_annex_event));
+
+      event->annex_index = NOTIF_ANNEX_TRACE_STATUS;
+      notif_push (&notif_trace, (struct notif_event *) event);
+    }
 }
 
 static int

@@ -521,7 +521,7 @@ SER_HARDWIRE = @SER_HARDWIRE@
 # The `remote' debugging target is supported for most architectures,
 # but not all (e.g. 960)
 REMOTE_OBS = remote.o dcache.o tracepoint.o ax-general.o ax-gdb.o remote-fileio.o \
-	remote-notif.o ctf.o notif-base.o
+	remote-notif.o ctf.o notif-base.o remote-notif-trace.o
 
 # This is remote-sim.o if a simulator is to be linked in.
 SIM_OBS = @SIM_OBS@
@@ -752,7 +752,7 @@ SFILES = ada-exp.y ada-lang.c ada-typeprint.c ada-valprint.c ada-tasks.c \
 	proc-service.list progspace.c \
 	prologue-value.c psymtab.c \
 	regcache.c reggroups.c remote.c remote-fileio.c remote-notif.c \
-	notif-base.c reverse.c \
+	notif-base.c remote-notif-trace.c reverse.c \
 	sentinel-frame.c \
 	serial.c ser-base.c ser-unix.c skip.c \
 	solib.c solib-target.c source.c \
