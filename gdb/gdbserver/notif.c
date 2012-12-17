@@ -53,6 +53,7 @@
 static struct notif_server *notifs[] =
 {
   &notif_stop,
+  &notif_point,
 };
 
 /* Write another event or an OK, if there are no more left, to

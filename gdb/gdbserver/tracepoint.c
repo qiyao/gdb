@@ -2189,6 +2189,71 @@ set_trace_state_variable_getter (int num, LONGEST (*getter) (void))
   tsv->getter = getter;
 }
 
+#ifndef IN_PROCESS_AGENT
+#include "notif.h"
+
+enum notif_point_event_type
+{
+  /* Tracepoint is modified.  */
+  POINT_MODIFIED,
+};
+
+struct notif_point_event
+{
+  struct notif_event base;
+
+  enum notif_point_event_type type;
+
+  union
+  {
+    struct tracepoint *tpoint;
+  }u;
+};
+
+static void response_tracepoint (char *, struct tracepoint *);
+
+static void
+notif_point_write (struct notif_event *event, char *own_buf)
+{
+  struct notif_point_event *pevent
+    = (struct notif_point_event *) event;
+
+  switch (pevent->type)
+    {
+    case POINT_MODIFIED:
+      sprintf (own_buf, "modified:");
+      /* Write the definition of the tracepoint.  */
+      response_tracepoint (own_buf + 9, pevent->u.tpoint);
+      break;
+    default:
+      fatal ("error");
+    }
+
+}
+
+struct notif_server notif_point =
+{
+  "vPointed", "Point", NULL, notif_point_write,
+};
+
+/* Tracepoint *TPOINT is changed.  */
+
+static void
+tracepoint_changed (struct tracepoint *tpoint)
+{
+  struct notif_point_event *event
+    = malloc (sizeof (struct notif_point_event));
+
+  event->type = POINT_MODIFIED;
+  event->u.tpoint = tpoint;
+  notif_push (&notif_point, (struct notif_event *) event);
+}
+#else
+static void
+tracepoint_changed (struct tracepoint *tpoint)
+{
+}
+#endif
 /* Add a raw traceframe for the given tracepoint.  */
 
 static struct traceframe *
@@ -2228,6 +2293,7 @@ add_traceframe_block (struct traceframe *tframe,
   tframe->data_size += amt;
   tpoint->traceframe_usage += amt;
 
+  tracepoint_changed (tpoint);
   return block;
 }
 
@@ -4561,6 +4627,7 @@ collect_data_at_tracepoint (struct tracepoint_hit_ctx *ctx, CORE_ADDR stop_pc,
 
   /* Only count it as a hit when we actually collect data.  */
   tpoint->hit_count++;
+  tracepoint_changed (tpoint);
 
   /* If we've exceeded a defined pass count, record the event for
      later, and finish the collection for this hit.  This test is only

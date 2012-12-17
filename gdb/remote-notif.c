@@ -44,11 +44,14 @@
 
 unsigned int notif_debug = 0;
 
+extern struct notif_client notif_client_point;
+
 /* Supported clients of notifications.  */
 
 static struct notif_client *notifs[] =
 {
   &notif_client_stop,
+  &notif_client_point,
 };
 
 static void do_notif_event_xfree (void *arg);
