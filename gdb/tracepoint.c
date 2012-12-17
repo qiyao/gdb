@@ -3431,7 +3431,7 @@ cond_string_is_same (char *str1, char *str2)
    toggle that freely, and may have done so in anticipation of the
    next trace run.  Return the location of matched tracepoint.  */
 
-static struct bp_location *
+struct bp_location *
 find_matching_tracepoint_location (struct uploaded_tp *utp)
 {
   VEC(breakpoint_p) *tp_vec = all_tracepoints ();

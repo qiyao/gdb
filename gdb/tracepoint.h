@@ -266,6 +266,8 @@ extern void parse_tsv_definition (char *line, struct uploaded_tsv **utsvp);
 extern struct uploaded_tp *get_uploaded_tp (int num, ULONGEST addr,
 					    struct uploaded_tp **utpp);
 extern struct tracepoint *create_tracepoint_from_upload (struct uploaded_tp *utp);
+extern struct bp_location *
+  find_matching_tracepoint_location (struct uploaded_tp *utp);
 extern void merge_uploaded_tracepoints (struct uploaded_tp **utpp);
 extern void merge_uploaded_trace_state_variables (struct uploaded_tsv **utsvp);
 
