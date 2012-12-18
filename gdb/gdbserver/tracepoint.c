@@ -812,6 +812,8 @@ struct tracepoint
      inserted the trap or jump, or hooked into a static tracepoint.
      NULL if we haven't inserted it yet.  */
   void *handle;
+
+  short ack_replied;
 #endif
 
 };
@@ -1801,6 +1803,7 @@ add_tracepoint (int num, CORE_ADDR addr)
   tpoint->source_strings = NULL;
   tpoint->compiled_cond = 0;
   tpoint->handle = NULL;
+  tpoint->ack_replied = 1;
   tpoint->next = NULL;
 
   /* Find a place to insert this tracepoint into list in order to keep
@@ -2226,6 +2229,7 @@ notif_point_write (struct notif_event *event, char *own_buf)
       sprintf (own_buf, "modified:");
       /* Write the definition of the tracepoint.  */
       response_tracepoint (own_buf + 9, pevent->u.tpoint);
+      pevent->u.tpoint->ack_replied = 1;
       break;
     case POINT_CREATED:
       sprintf (own_buf, "created:");
@@ -2246,12 +2250,19 @@ struct notif_server notif_point =
 static void
 tracepoint_changed (struct tracepoint *tpoint)
 {
-  struct notif_point_event *event
-    = malloc (sizeof (struct notif_point_event));
+  struct notif_point_event *event;
+
+  /* If notification event for TPOINT hasn't been sent yet, don't
+     queue new events.  */
+  if (!tpoint->ack_replied)
+    return;
+
+  event = malloc (sizeof (struct notif_point_event));
 
   event->type = POINT_MODIFIED;
   event->u.tpoint = tpoint;
   notif_push (&notif_point, (struct notif_event *) event);
+  tpoint->ack_replied = 0;
 }
 #else
 static void
