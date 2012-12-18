@@ -76,6 +76,7 @@ void handle_notification (char *buf);
 
 void remote_notif_register_async_event_handler (void);
 void remote_notif_unregister_async_event_handler (void);
+void remote_notif_mark_async_event_token (void);
 
 void remote_notif_process (struct notif_client *except);
 extern struct notif_client notif_client_stop;
