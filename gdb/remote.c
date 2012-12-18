@@ -4757,15 +4757,6 @@ remote_resume (struct target_ops *ops,
   struct remote_state *rs = get_remote_state ();
   char *buf;
 
-  /* In all-stop, we can't mark REMOTE_ASYNC_GET_PENDING_EVENTS_TOKEN
-     (explained in remote-notif.c:handle_notification) so
-     remote_notif_process is not called.  We need find a place where
-     it is safe to start a 'vNotif' sequence.  It is good to do it
-     before resuming inferior, because inferior was stopped and no RSP
-     traffic at that moment.  */
-  if (!non_stop)
-    remote_notif_process (&notif_client_stop);
-
   last_sent_signal = siggnal;
   last_sent_step = step;
 
@@ -5848,6 +5839,15 @@ remote_wait_as (ptid_t ptid, struct target_waitstatus *status, int options)
 						      rs->buf);
 
 	event_ptid = process_stop_reply (stop_reply, status);
+
+	/* In all-stop, we can't mark
+	   REMOTE_ASYNC_GET_PENDING_EVENTS_TOKEN (explained in
+	   remote-notif.c:handle_notification) so remote_notif_process
+	   is not called.  We need find a place where it is safe to
+	   start a 'vNotif' sequence.  It is good to do it when inferior
+	   was stopped and no RSP traffic at that moment.  */
+	if (!non_stop)
+	  remote_notif_mark_async_event_token ();
 	break;
       }
     case 'O':		/* Console output.  */

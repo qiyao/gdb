@@ -117,7 +117,6 @@ remote_notif_process (struct notif_client *except)
 static void
 remote_async_get_pending_events_handler (gdb_client_data data)
 {
-  gdb_assert (non_stop);
   remote_notif_process (NULL);
 }
 
@@ -145,6 +144,14 @@ remote_notif_unregister_async_event_handler (void)
 {
   if (remote_async_get_pending_events_token)
     delete_async_event_handler (&remote_async_get_pending_events_token);
+}
+
+/* Mark REMOTE_ASYNC_GET_PENDING_EVENTS_TOKEN.  */
+
+void
+remote_notif_mark_async_event_token (void)
+{
+  mark_async_event_handler (remote_async_get_pending_events_token);
 }
 
 /* Remote notification handler.  */
