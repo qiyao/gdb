@@ -3552,6 +3552,17 @@ stop_tracing (void)
     }
 
   unpause_all (1);
+
+#ifndef IN_PROCESS_AGENT
+  {
+    struct notif_point_event *event
+      = malloc (sizeof (struct notif_point_event));
+
+    event->type = POINT_CREATED;
+    notif_push (&notif_point, (struct notif_event *) event);
+  }
+#endif
+
 }
 
 static int
