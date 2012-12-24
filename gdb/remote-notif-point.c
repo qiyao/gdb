@@ -24,7 +24,7 @@
 #include "remote-notif.h"
 #include "tracepoint.h"
 
-enum NOTIF_POINT_TYPE { POINT_MODIFIED, };
+enum NOTIF_POINT_TYPE { POINT_MODIFIED, POINT_CREATED, };
 
 struct notif_point_event
 {
@@ -56,6 +56,10 @@ remote_notif_point_parse (struct notif_client *self, char *buf,
       pevent->type = POINT_MODIFIED;
       pevent->u.utp = utp;
     }
+  else if (strncmp (buf, "created:", 8) == 0)
+    {
+      pevent->type = POINT_CREATED;
+    }
   else
     error (_("Unknown trace notification."));
 }
@@ -82,6 +86,12 @@ remote_notif_point_ack (struct notif_client *self, char *buf,
 	xfree (pevent->u.utp);
 	/* The tracepoint (location) should exist in GDB side.  */
 	gdb_assert (loc != NULL);
+      }
+      break;
+    case POINT_CREATED:
+      {
+	/* Start the sequence to query about auto-load
+	   breakpoints.  */
       }
       break;
     }

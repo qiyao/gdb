@@ -2196,6 +2196,8 @@ enum notif_point_event_type
 {
   /* Tracepoint is modified.  */
   POINT_MODIFIED,
+  /* Breakpoint is created.  */
+  POINT_CREATED,
 };
 
 struct notif_point_event
@@ -2224,6 +2226,9 @@ notif_point_write (struct notif_event *event, char *own_buf)
       sprintf (own_buf, "modified:");
       /* Write the definition of the tracepoint.  */
       response_tracepoint (own_buf + 9, pevent->u.tpoint);
+      break;
+    case POINT_CREATED:
+      sprintf (own_buf, "created:");
       break;
     default:
       fatal ("error");
