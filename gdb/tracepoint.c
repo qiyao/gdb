@@ -1,6 +1,6 @@
 /* Tracing functionality for remote targets in custom GDB protocol
 
-   Copyright (C) 1997-2012 Free Software Foundation, Inc.
+   Copyright (C) 1997-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -92,11 +92,6 @@ void (*deprecated_trace_start_stop_hook) (int start, int from_tty);
 extern void (*deprecated_readline_begin_hook) (char *, ...);
 extern char *(*deprecated_readline_hook) (char *);
 extern void (*deprecated_readline_end_hook) (void);
-
-/* GDB commands implemented in other modules:
- */  
-
-extern void output_command (char *, int);
 
 /* 
    Tracepoint.c:
@@ -312,8 +307,7 @@ set_traceframe_context (struct frame_info *trace_frame)
 
   /* Save file name as "$trace_file", a debugger variable visible to
      users.  */
-  if (traceframe_sal.symtab == NULL
-      || traceframe_sal.symtab->filename == NULL)
+  if (traceframe_sal.symtab == NULL)
     clear_internalvar (lookup_internalvar ("trace_file"));
   else
     set_internalvar_string (lookup_internalvar ("trace_file"),
@@ -4873,8 +4867,7 @@ print_one_static_tracepoint_marker (int count,
 	{
 	  const char *fullname = symtab_to_fullname (sal.symtab);
 
-	  if (fullname)
-	    ui_out_field_string (uiout, "fullname", fullname);
+	  ui_out_field_string (uiout, "fullname", fullname);
 	}
       else
 	ui_out_field_skip (uiout, "fullname");

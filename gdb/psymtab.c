@@ -1,6 +1,6 @@
 /* Partial symbol tables.
    
-   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -65,9 +65,8 @@ static struct partial_symbol *find_pc_sect_psymbol (struct objfile *,
 						    CORE_ADDR,
 						    struct obj_section *);
 
-static struct partial_symbol *fixup_psymbol_section (struct partial_symbol
-						     *psym,
-						     struct objfile *objfile);
+static void fixup_psymbol_section (struct partial_symbol *psym,
+				   struct objfile *objfile);
 
 static struct symtab *psymtab_to_symtab (struct objfile *objfile,
 					 struct partial_symtab *pst);
@@ -480,16 +479,13 @@ find_pc_sect_psymbol (struct objfile *objfile,
   return best;
 }
 
-static struct partial_symbol *
+static void
 fixup_psymbol_section (struct partial_symbol *psym, struct objfile *objfile)
 {
   CORE_ADDR addr;
 
-  if (!psym)
-    return NULL;
-
-  if (SYMBOL_OBJ_SECTION (psym))
-    return psym;
+  if (psym == NULL || SYMBOL_OBJ_SECTION (psym) != NULL)
+    return;
 
   gdb_assert (objfile);
 
@@ -503,12 +499,10 @@ fixup_psymbol_section (struct partial_symbol *psym, struct objfile *objfile)
     default:
       /* Nothing else will be listed in the minsyms -- no use looking
 	 it up.  */
-      return psym;
+      return;
     }
 
   fixup_section (&psym->ginfo, addr, objfile);
-
-  return psym;
 }
 
 static struct symtab *
@@ -632,15 +626,6 @@ match_partial_symbol (struct objfile *objfile,
     }
 
   return NULL;
-}
-
-static void
-pre_expand_symtabs_matching_psymtabs (struct objfile *objfile,
-				      enum block_enum block_kind,
-				      const char *name,
-				      domain_enum domain)
-{
-  /* Nothing.  */
 }
 
 /* Returns the name used to search psymtabs.  Unlike symtabs, psymtabs do
@@ -1434,7 +1419,6 @@ const struct quick_symbol_functions psym_functions =
   forget_cached_source_info_partial,
   partial_map_symtabs_matching_filename,
   lookup_symbol_aux_psymtabs,
-  pre_expand_symtabs_matching_psymtabs,
   print_psymtab_stats_for_objfile,
   dump_psymtabs_for_objfile,
   relocate_psymtabs,

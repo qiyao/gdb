@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2012 Free Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -137,8 +137,6 @@ char gdb_dirbuf[1024];
    and a prompt string.  */
 
 void (*window_hook) (FILE *, char *);
-
-int epoch_interface;
 
 /* Buffer used for reading command lines, and the size
    allocated for it so far.  */
@@ -1123,7 +1121,7 @@ print_gdb_version (struct ui_file *stream)
   /* Second line is a copyright notice.  */
 
   fprintf_filtered (stream,
-		    "Copyright (C) 2012 Free Software Foundation, Inc.\n");
+		    "Copyright (C) 2013 Free Software Foundation, Inc.\n");
 
   /* Following the copyright is a brief statement that the program is
      free software, that users are free to copy and change it on

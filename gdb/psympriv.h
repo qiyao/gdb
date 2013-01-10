@@ -1,6 +1,6 @@
 /* Private partial symbol table definitions.
 
-   Copyright (C) 2009-2012 Free Software Foundation, Inc.
+   Copyright (C) 2009-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -226,7 +226,8 @@ extern struct partial_symtab *start_psymtab_common (struct objfile *,
 						    struct partial_symbol **);
 
 extern struct partial_symtab *allocate_psymtab (const char *,
-						struct objfile *);
+						struct objfile *)
+  ATTRIBUTE_NONNULL (1);
 
 extern void discard_psymtab (struct objfile *, struct partial_symtab *);
 

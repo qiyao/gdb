@@ -1,6 +1,6 @@
 /* Everything about breakpoints, for GDB.
 
-   Copyright (C) 1986-2012 Free Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -81,6 +81,13 @@
 
 #include "mi/mi-common.h"
 #include "python/python.h"
+
+/* Enums for exception-handling support.  */
+enum exception_event_kind
+{
+  EX_EVENT_THROW,
+  EX_EVENT_CATCH
+};
 
 /* Prototypes for local functions.  */
 
@@ -5694,8 +5701,7 @@ print_breakpoint_location (struct breakpoint *b,
 	  struct symtab_and_line sal = find_pc_line (loc->address, 0);
 	  const char *fullname = symtab_to_fullname (sal.symtab);
 	  
-	  if (fullname)
-	    ui_out_field_string (uiout, "fullname", fullname);
+	  ui_out_field_string (uiout, "fullname", fullname);
 	}
       
       ui_out_field_int (uiout, "line", loc->line_number);
@@ -13870,8 +13876,7 @@ update_static_tracepoint (struct breakpoint *b, struct symtab_and_line sal)
 	    {
 	      const char *fullname = symtab_to_fullname (sal2.symtab);
 
-	      if (fullname)
-		ui_out_field_string (uiout, "fullname", fullname);
+	      ui_out_field_string (uiout, "fullname", fullname);
 	    }
 
 	  ui_out_field_int (uiout, "line", sal2.line);
@@ -14297,9 +14302,6 @@ breakpoint_re_set (void)
   create_longjmp_master_breakpoint ();
   create_std_terminate_master_breakpoint ();
   create_exception_master_breakpoint ();
-
-  /* While we're at it, reset the skip list too.  */
-  skip_re_set ();
 }
 
 /* Reset the thread number of this breakpoint:

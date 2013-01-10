@@ -1,6 +1,6 @@
 /* GDB CLI commands.
 
-   Copyright (C) 2000-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 2000-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -840,16 +840,7 @@ edit_command (char *arg, int from_tty)
   if ((editor = (char *) getenv ("EDITOR")) == NULL)
       editor = "/bin/ex";
 
-  /* If we don't already know the full absolute file name of the
-     source file, find it now.  */
-  if (!sal.symtab->fullname)
-    {
-      fn = symtab_to_fullname (sal.symtab);
-      if (!fn)
-	fn = "unknown";
-    }
-  else
-    fn = sal.symtab->fullname;
+  fn = symtab_to_fullname (sal.symtab);
 
   /* Quote the file name, in case it has whitespace or other special
      characters.  */

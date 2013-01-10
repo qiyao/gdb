@@ -1,6 +1,6 @@
 /* Top level stuff for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2005, 2007-2012 Free Software Foundation, Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -126,7 +126,7 @@ relocate_gdb_directory (const char *initial, int flag)
     {
       struct stat s;
 
-      if (stat (dir, &s) != 0 || !S_ISDIR (s.st_mode))
+      if (*dir == '\0' || stat (dir, &s) != 0 || !S_ISDIR (s.st_mode))
 	{
 	  xfree (dir);
 	  dir = NULL;
@@ -451,7 +451,6 @@ captured_main (void *data)
       {"n", no_argument, &inhibit_gdbinit, 1},
       {"batch-silent", no_argument, 0, 'B'},
       {"batch", no_argument, &batch_flag, 1},
-      {"epoch", no_argument, &epoch_interface, 1},
 
     /* This is a synonym for "--annotate=1".  --annotate is now
        preferred, but keep this here for a long time because people

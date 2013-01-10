@@ -1,7 +1,6 @@
 /* Symbol table definitions for GDB.
 
-   Copyright (C) 1986, 1988-2004, 2007-2012 Free Software Foundation,
-   Inc.
+   Copyright (C) 1986-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -815,7 +814,7 @@ struct symtab
      all the symtabs in a given compilation unit.  */
   struct macro_table *macro_table;
 
-  /* Name of this source file.  */
+  /* Name of this source file.  This pointer is never NULL.  */
 
   char *filename;
 
@@ -1122,21 +1121,6 @@ struct symtabs_and_lines
   struct symtab_and_line *sals;
   int nelts;
 };
-
-
-
-/* Some types and macros needed for exception catchpoints.
-   Can't put these in target.h because symtab_and_line isn't
-   known there.  This file will be included by breakpoint.c,
-   hppa-tdep.c, etc.  */
-
-/* Enums for exception-handling support.  */
-enum exception_event_kind
-{
-  EX_EVENT_THROW,
-  EX_EVENT_CATCH
-};
-
 
 
 /* Given a pc value, return line number it is in.  Second arg nonzero means

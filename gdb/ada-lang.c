@@ -1,7 +1,6 @@
 /* Ada language support routines for GDB, the GNU debugger.
 
-   Copyright (C) 1992-1994, 1997-2000, 2003-2005, 2007-2012 Free
-   Software Foundation, Inc.
+   Copyright (C) 1992-2013 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -11084,6 +11083,7 @@ is_known_support_routine (struct frame_info *frame)
   const char *func_name;
   enum language func_lang;
   int i;
+  const char *fullname;
 
   /* If this code does not have any debugging information (no symtab),
      This cannot be any user code.  */
@@ -11098,7 +11098,8 @@ is_known_support_routine (struct frame_info *frame)
      for the user.  This should also take care of case such as VxWorks
      where the kernel has some debugging info provided for a few units.  */
 
-  if (symtab_to_fullname (sal.symtab) == NULL)
+  fullname = symtab_to_fullname (sal.symtab);
+  if (access (fullname, R_OK) != 0)
     return 1;
 
   /* Check the unit filename againt the Ada runtime file naming.
@@ -11792,7 +11793,7 @@ allocate_location_catch_assert (struct breakpoint *self)
 static void
 re_set_catch_assert (struct breakpoint *b)
 {
-  return re_set_exception (ex_catch_assert, b);
+  re_set_exception (ex_catch_assert, b);
 }
 
 static void

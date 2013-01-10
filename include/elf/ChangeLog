@@ -1,3 +1,13 @@
+2013-01-08  Yufeng Zhang  <yufeng.zhang@arm.com>
+
+	* common.h (NT_ARM_TLS, NT_ARM_HW_BREAK, NT_ARM_HW_WATCH): New macro
+	definitions.
+
+2013-01-04  Juergen Urban <JuergenUrban@gmx.de>
+
+	* mips.h: Add MIPS machine variant number for r5900 which is
+	compatible with old Playstation 2 software.
+
 2012-11-16  H.J. Lu  <hongjiu.lu@intel.com>
 
 	* common.h (DF_1_CONLFAT): Renamed to ...
