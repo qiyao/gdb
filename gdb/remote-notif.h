@@ -21,6 +21,7 @@
 #define REMOTE_NOTIF_H
 
 #include "queue.h"
+#include "notif-base.h"
 
 /* An event of a type of async remote notification.  */
 
@@ -35,17 +36,7 @@ struct notif_event
 
 typedef struct notif_client
 {
-  /* The name of notification packet.  */
-  const char *name;
-
-  /* The packet to acknowledge a previous reply.  */
-  const char *ack_command;
-
-  /* Parse BUF to get the expected event and update EVENT.  This
-     function may throw exception if contents in BUF is not the
-     expected event.  */
-  void (*parse) (struct notif_client *self, char *buf,
-		 struct notif_event *event);
+  struct notif_base base;
 
   /* Send field <ack_command> to remote, and do some checking.  If
      something wrong, throw an exception.  */

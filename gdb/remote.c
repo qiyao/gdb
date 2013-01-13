@@ -5329,7 +5329,7 @@ remote_notif_stop_ack (struct notif_client *self, char *buf,
   struct stop_reply *stop_reply = (struct stop_reply *) event;
 
   /* acknowledge */
-  putpkt ((char *) self->ack_command);
+  putpkt ((char *) self->base.ack_name);
 
   if (stop_reply->ws.kind == TARGET_WAITKIND_IGNORE)
       /* We got an unknown stop reply.  */
@@ -5369,13 +5369,16 @@ remote_notif_stop_alloc_reply (void)
   return r;
 }
 
+static struct notif_annex notif_client_annex_stop[] =
+{
+  { NULL, remote_notif_stop_parse, },
+};
+
 /* A client of notification Stop.  */
 
 struct notif_client notif_client_stop =
 {
-  "Stop",
-  "vStopped",
-  remote_notif_stop_parse,
+  { "Stop", "vStopped", notif_client_annex_stop, },
   remote_notif_stop_ack,
   remote_notif_stop_can_get_pending_events,
   remote_notif_stop_alloc_reply,
@@ -5802,7 +5805,7 @@ remote_notif_get_pending_events (struct notif_client *nc)
       if (notif_debug)
 	fprintf_unfiltered (gdb_stdlog,
 			    "notif: process: '%s' ack pending event\n",
-			    nc->name);
+			    nc->base.notif_name);
 
       /* acknowledge */
       nc->ack (nc, rs->buf, nc->pending_event);
@@ -5822,7 +5825,7 @@ remote_notif_get_pending_events (struct notif_client *nc)
       if (notif_debug)
 	fprintf_unfiltered (gdb_stdlog,
 			    "notif: process: '%s' no pending reply\n",
-			    nc->name);
+			    nc->base.notif_name);
     }
 }
 

@@ -54,6 +54,30 @@ static struct notif_server *notifs[] =
   &notif_stop,
 };
 
+/* Helper function to write EVENT of NOTIF to buffer OWN_BUF.  */
+
+static void
+notif_write_event_1 (struct notif_base *notif,
+		     struct notif_event *event,
+		     char *own_buf)
+{
+  int annex_index = 0;
+
+  /* If the NOTIF has annexes, extract the annex index from the
+     EVENT and append annex name to OWN_BUF; otherwise, NOTIF
+     doesn't have annex and use slot 0 of annexes for the
+     notification itself.  */
+  if (NOTIF_HAS_ANNEX (notif))
+    {
+      annex_index
+	= ((struct notif_annex_event *) event)->annex_index;
+      sprintf (own_buf, "%s:", notif->annexes[annex_index].name);
+      own_buf += strlen (notif->annexes[annex_index].name) + 1;
+    }
+
+  notif->annexes[annex_index].write (event, own_buf);
+}
+
 /* Write another event or an OK, if there are no more left, to
    OWN_BUF.  */
 
@@ -65,7 +89,8 @@ notif_write_event (struct notif_server *notif, char *own_buf)
       struct notif_event *event
 	= QUEUE_peek (notif_event_p, notif->queue);
 
-      notif->write (event, own_buf);
+      notif_write_event_1 ((struct notif_base *) notif, event,
+			   own_buf);
     }
   else
     write_ok (own_buf);
@@ -84,8 +109,9 @@ handle_notif_ack (char *own_buf, int packet_len)
   for (i = 0; i < ARRAY_SIZE (notifs); i++)
     {
       np = notifs[i];
-      if (strncmp (own_buf, np->ack_name, strlen (np->ack_name)) == 0
-	  && packet_len == strlen (np->ack_name))
+      if (0 == strncmp (own_buf, np->base.ack_name,
+			strlen (np->base.ack_name))
+	  && packet_len == strlen (np->base.ack_name))
 	break;
     }
 
@@ -100,7 +126,7 @@ handle_notif_ack (char *own_buf, int packet_len)
 	= QUEUE_deque (notif_event_p, np->queue);
 
       if (remote_debug)
-	fprintf (stderr, "%s: acking %d\n", np->ack_name,
+	fprintf (stderr, "%s: acking %d\n", np->base.ack_name,
 		 QUEUE_length (notif_event_p, np->queue));
 
       xfree (head);
@@ -120,7 +146,8 @@ notif_event_enque (struct notif_server *notif,
   QUEUE_enque (notif_event_p, notif->queue, event);
 
   if (remote_debug)
-    fprintf (stderr, "pending events: %s %d\n", notif->notif_name,
+    fprintf (stderr, "pending events: %s %d\n",
+	     notif->base.notif_name,
 	     QUEUE_length (notif_event_p, notif->queue));
 
 }
@@ -142,10 +169,10 @@ notif_push (struct notif_server *np, struct notif_event *new_event)
       char buf[PBUFSIZ];
       char *p = buf;
 
-      xsnprintf (p, PBUFSIZ, "%s:", np->notif_name);
+      xsnprintf (p, PBUFSIZ, "%s:", np->base.notif_name);
       p += strlen (p);
 
-      np->write (new_event, p);
+      notif_write_event_1 ((struct notif_base *) np, new_event, p);
       putpkt_notif (buf);
     }
 }

@@ -40352,13 +40352,15 @@ transmit notifications without fear of confusing older clients.  There
 are no notifications defined for @value{GDBN} to send at the moment, but we
 assume that most older stubs would ignore them, as well.)
 
-Each notification is comprised of three parts:
+Each notification is comprised of four parts:
 @table @samp
-@item @var{name}:@var{event}
+@item @var{name}[:@var{annex}]:@var{event}
 The notification packet is sent by the side that initiates the
 exchange (currently, only the stub does that), with @var{event}
 carrying the specific information about the notification.
-@var{name} is the name of the notification.
+@var{name} is the name of the notification.  The @var{annex} is
+specific to @var{name}; it can supply additional details about
+@var{event}.
 @item @var{ack}
 The acknowledge sent by the other side, usually @value{GDBN}, to
 acknowledge the exchange and request the event.
@@ -40421,15 +40423,17 @@ following example:
 @end smallexample
 
 The following notifications are defined:
-@multitable @columnfractions 0.12 0.12 0.38 0.38
+@multitable @columnfractions 0.10 0.10 0.10 0.35 0.35
 
 @item Notification
 @tab Ack
+@tab Annex
 @tab Event
 @tab Description
 
 @item Stop
 @tab vStopped
+@tab
 @tab @var{reply}.  The @var{reply} has the form of a stop reply, as
 described in @ref{Stop Reply Packets}.  Refer to @ref{Remote Non-Stop},
 for information on how these notifications are acknowledged by 

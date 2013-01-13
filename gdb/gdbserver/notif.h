@@ -20,6 +20,7 @@
 #include "server.h"
 #include "target.h"
 #include "queue.h"
+#include "notif-base.h"
 
 /* Structure holding information related to a single event.  We
    keep a queue of these to push to GDB.  It can be extended if
@@ -33,25 +34,26 @@ typedef struct notif_event
 
 DECLARE_QUEUE_P (notif_event_p);
 
+/* An event of a notification which has an annex.  */
+
+struct notif_annex_event
+{
+  struct notif_event base;
+  /* The index of the annex in field 'annexes' in 'notif_server'.  */
+  int annex_index;
+};
+
 /* A type notification to GDB.  An object of 'struct notif_server'
    represents a type of notification.  */
 
 typedef struct notif_server
 {
-  /* The name of ack packet, for example, 'vStopped'.  */
-  const char *ack_name;
-
-  /* The notification packet, for example, '%Stop'.  Note that '%' is
-     not in 'notif_name'.  */
-  const char *notif_name;
+  struct notif_base base;
 
   /* A queue of events to GDB.  A new notif_event can be enque'ed
      into QUEUE at any appropriate time, and the notif_reply is
      deque'ed only when the ack from GDB arrives.  */
   QUEUE (notif_event_p) *queue;
-
-  /* Write event EVENT to OWN_BUF.  */
-  void (*write) (struct notif_event *event, char *own_buf);
 } *notif_server_p;
 
 extern struct notif_server notif_stop;

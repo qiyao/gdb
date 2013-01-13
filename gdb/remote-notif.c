@@ -53,6 +53,44 @@ static struct notif_client *notifs[] =
 
 static void do_notif_event_xfree (void *arg);
 
+/* Iterate over annexes in NC to match annex in BUF.   */
+
+static void
+remote_notif_parse_1 (struct notif_client *nc,
+		      struct notif_event *event, char *buf)
+{
+  const struct notif_annex *m = NULL;
+  const struct notif_base *base = (struct notif_base *) nc;
+
+  if (NOTIF_HAS_ANNEX (base))
+    {
+      int i;
+
+      NOTIF_ITER_ANNEX (base, i, m)
+	{
+	  if (strncmp (m->name, buf, strlen (base->notif_name)) == 0
+	      /* The annex is separated by ':' for the rest of
+		 contents in BUF.  */
+	      && buf[strlen (m->name)] == ':')
+	    {
+	      /* Pass BUF without annex and ':'.  */
+	      m->parse (nc, buf + strlen (m->name) + 1, event);
+	      break;
+	    }
+	  m = NULL;
+	}
+    }
+  else
+    {
+      m = &base->annexes[0];
+      m->parse (nc, buf, event);
+    }
+
+  if (m == NULL)
+    error (_("Can't parse '%s' for notif '%s'"), buf,
+	   base->notif_name);
+}
+
 /* Parse the BUF for the expected notification NC, and send packet to
    acknowledge.  */
 
@@ -65,9 +103,9 @@ remote_notif_ack (struct notif_client *nc, char *buf)
 
   if (notif_debug)
     fprintf_unfiltered (gdb_stdlog, "notif: ack '%s'\n",
-			nc->ack_command);
+			nc->base.ack_name);
 
-  nc->parse (nc, buf, event);
+  remote_notif_parse_1 (nc, event, buf);
   nc->ack (nc, buf, event);
 
   discard_cleanups (old_chain);
@@ -83,9 +121,10 @@ remote_notif_parse (struct notif_client *nc, char *buf)
     = make_cleanup (do_notif_event_xfree, event);
 
   if (notif_debug)
-    fprintf_unfiltered (gdb_stdlog, "notif: parse '%s'\n", nc->name);
+    fprintf_unfiltered (gdb_stdlog, "notif: parse '%s'\n",
+			nc->base.notif_name);
 
-  nc->parse (nc, buf, event);
+  remote_notif_parse_1 (nc, event, buf);
 
   discard_cleanups (old_chain);
   return event;
@@ -157,8 +196,9 @@ handle_notification (struct remote_notif_state *state, char *buf)
   for (i = 0; i < ARRAY_SIZE (notifs); i++)
     {
       nc = notifs[i];
-      if (strncmp (buf, nc->name, strlen (nc->name)) == 0
-	  && buf[strlen (nc->name)] == ':')
+      if (0 == strncmp (buf, nc->base.notif_name,
+			strlen (nc->base.notif_name))
+	  && buf[strlen (nc->base.notif_name)] == ':')
 	break;
     }
 
@@ -179,7 +219,8 @@ handle_notification (struct remote_notif_state *state, char *buf)
   else
     {
       struct notif_event *event
-	= remote_notif_parse (nc, buf + strlen (nc->name) + 1);
+	= remote_notif_parse (nc,
+			      buf + strlen (nc->base.notif_name) + 1);
 
       /* Be careful to only set it after parsing, since an error
 	 may be thrown then.  */
@@ -232,7 +273,7 @@ handle_notification (struct remote_notif_state *state, char *buf)
       if (notif_debug)
 	fprintf_unfiltered (gdb_stdlog,
 			    "notif: Notification '%s' captured\n",
-			    nc->name);
+			    nc->base.notif_name);
     }
 }
 
