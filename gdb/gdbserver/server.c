@@ -185,9 +185,14 @@ vstop_notif_reply (struct notif_event *event, char *own_buf)
   prepare_resume_reply (own_buf, vstop->ptid, &vstop->status);
 }
 
+static struct notif_annex notif_annex_stop[] =
+{
+  { NULL, vstop_notif_reply, },
+};
+
 struct notif_server notif_stop =
 {
-  "vStopped", "Stop", NULL, vstop_notif_reply,
+  { "Stop", "vStopped", notif_annex_stop, }, NULL,
 };
 
 static int
