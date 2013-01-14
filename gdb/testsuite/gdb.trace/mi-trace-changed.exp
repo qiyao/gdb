@@ -71,4 +71,79 @@ proc test_normal_tstart_stop { } {
 
 test_normal_tstart_stop
 
+# Verify that MI notification '=trace-stopped' is emitted when trace
+# buffer is full.
+
+proc test_trace_buffer_full { } {
+    with_test_prefix "tracebuffer full" {
+	global mi_gdb_prompt
+
+	if [mi_gdb_start] {
+	    return
+	}
+	mi_run_to_main
+
+	mi_gdb_test "-break-insert -a func2" {.*\^done,bkpt=.*} \
+	    "insert tracepoint on func2"
+
+	send_gdb "actions\n"
+	gdb_expect {
+	    -re "End with" {
+	    }
+	}
+
+	send_gdb "collect buf\nend\n"
+	set test "define actions"
+	gdb_expect {
+	    -re ".*${mi_gdb_prompt}$" {
+		pass $test
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+
+	# No =trace-started notification.
+	mi_gdb_test "-trace-start" "-trace-start\r\n=breakpoint-modified\[^\n\]+\r\n\\^done" \
+	    "start trace without notification"
+	mi_gdb_test "-break-insert end" {.*\^done,bkpt=.*} \
+	    "insert breakpoint on end"
+
+	mi_send_resuming_command "exec-continue" \
+	    "continuing execution to end"
+
+	set test "trace-stopped triggered by bufferfull"
+	gdb_expect {
+	    # We don't set stop-notes.
+	    -re "=trace-stopped\\\\n" {
+		pass "$test"
+	    }
+	    timeout {
+		fail "$test (timeout)"
+	    }
+	}
+
+	global async
+	# In sync mode, eat all the output.  Don't have to do so in
+	# async mode.
+	if {!$async} {
+	    gdb_expect {
+		-re ".*${mi_gdb_prompt}$" {
+		}
+	    }
+	}
+	# GDB has got the rsp notifcation from remote stub that trace
+	# is stopped.
+	mi_gdb_test "tstop" ".*Trace is not running.*" \
+	    "tstop on stopped"
+
+	mi_gdb_test "-trace-status" ".*\\^done.*stop-reason=\"overflow\".*" \
+	    "trace-status"
+
+	mi_gdb_exit
+    }
+}
+
+test_trace_buffer_full
+
 return 0

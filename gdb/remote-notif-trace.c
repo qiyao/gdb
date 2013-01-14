@@ -22,6 +22,7 @@
 #include "remote.h"
 #include "tracepoint.h"
 #include "remote-notif.h"
+#include "observer.h"
 
 static void
 remote_notif_trace_status_parse (struct notif_client *self, char *buf,
@@ -31,6 +32,16 @@ remote_notif_trace_status_parse (struct notif_client *self, char *buf,
 
   gdb_assert (buf[0] == 'T');
   parse_trace_status (buf + 1, ts);
+
+  /* When the tracing is stopped, there is no changes anymore in
+     the trace, so the remote stub can't send another notification.
+     We don't have to worry about notifying 'trace_changed' observer
+     with argument 1 twice.
+     The remote stub can't request tracing start and the remote stub
+     may send multiple trace notifications on various status changes,
+     we don't notify 'trace_changed' observer with argument 0.  */
+  if (!ts->running)
+    observer_notify_trace_changed (0);
 }
 
 static void
