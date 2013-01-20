@@ -37,9 +37,18 @@ struct notif_annex
   const char *name;
 
 #ifdef GDBSERVER
+  /* This annex is supported by GDB or not.  A notification may have
+     multiple annexes and some of them are supported.  Annex is the
+     smallest unit of support.  */
+  int supported;
+
   /* Write event EVENT to OWN_BUF.  */
   void (*write) (struct notif_event *event, char *own_buf);
 #else
+  /* The id of the annex.  In GDB, we use this field as an index to
+     access the state of this annex.  */
+  int id;
+
   /* Parse BUF to get the expected event and update EVENT.  This
      function may throw exception if contents in BUF is not the
      expected event.  */
@@ -57,6 +66,15 @@ struct notif_annex
 
 #define NOTIF_HAS_ANNEX(NOTIF) ((NOTIF)->annexes[0].name != NULL)
 
+/* Whether the annex of notification N is supported.  */
+
+#ifdef GDBSERVER
+#define NOTIF_ANNEX_SUPPORTED(STATE, N, INDEX) \
+  ((N)->annexes[INDEX].supported)
+#else
+#define NOTIF_ANNEX_SUPPORTED(STATE, N, INDEX)	\
+  ((STATE)->supported[(N)->annexes[INDEX].id])
+#endif
 
 /* "Base class" of a notification.  It can be extended in both GDB
    and GDBserver to represent a type of notification.  */
@@ -75,5 +93,19 @@ struct notif_base
      of the notification.  */
   struct notif_annex *annexes;
 };
+
+char *notif_supported (struct notif_base *notifs[], int num);
+
+#ifndef GDBSERVER
+struct remote_notif_state;
+#endif
+
+void notif_parse_supported (const char *reply,
+			    struct notif_base *notifs[],
+#ifdef GDBSERVER
+			    int num);
+#else
+			    int num, struct remote_notif_state *state);
+#endif
 
 #endif /* NOTIF_BASE_H */

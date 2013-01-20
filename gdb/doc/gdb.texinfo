@@ -38737,6 +38737,15 @@ description.
 This feature indicates whether @value{GDBN} supports the
 @samp{qRelocInsn} packet (@pxref{Tracepoint Packets,,Relocate
 instruction reply packet}).
+
+@item notifications
+@anchor{notifications feature}
+This feature indicates that @value{GDBN} supports the async remote
+notifications (@pxref{Notification Packets}).  If the stub sees
+@samp{notifications=} with a string of supported notifications,
+separated by commas, it will report notifications supported by the
+stub.  Each notification in the string is composed by the name of the
+notification and the annexes, if any, which are separated by periods.
 @end table
 
 Stubs should ignore any unknown values for
@@ -38955,6 +38964,11 @@ These are the currently defined stub features and their properties:
 @tab @samp{-}
 @tab No
 
+@item @samp{Notifications}
+@tab Yes
+@tab @samp{-}
+@tab No
+
 @end multitable
 
 These are the currently defined stub features, in more detail:
@@ -39121,6 +39135,14 @@ See @ref{Bytecode Descriptions} for details about the bytecode.
 @cindex breakpoint commands, in remote protocol
 The remote stub supports running a breakpoint's command list itself,
 rather than reporting the hit to @value{GDBN}.
+
+@item Notifications=@var{name}@r{[}.@var{annex}@r{]}@dots{}@r{[},@var{name}@r{[}.@var{annex}@r{]}@dots{}@r{]}@dots{}
+@cindex notifications, in remote protocol
+The remote stub supports a string of notifications.  @var{name} is
+the name of the notification and @var{annex} is the name of the annex,
+if the notification has the annex.  Note that the notification may
+have several annexes, so here could be several @var{annex} parts
+separated by periods.
 
 @item Qbtrace:off
 The remote stub understands the @samp{Qbtrace:off} packet.

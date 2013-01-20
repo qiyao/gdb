@@ -183,6 +183,27 @@ notif_event_xfree (struct notif_event *event)
   xfree (event);
 }
 
+/* Record the notifications supported by GDB.  GDB_NOTIFICATIONS is a
+   string about notifications GDB supports.  */
+
+void
+notif_qsupported_record (char *gdb_notifications)
+{
+  return notif_parse_supported (gdb_notifications,
+				(struct notif_base **) notifs,
+				ARRAY_SIZE (notifs));
+}
+
+/* Return a string about notifications that GDBserver supports.
+   Return NULL if no notification is supported.  */
+
+char *
+notif_qsupported_reply (void)
+{
+  return notif_supported ((struct notif_base **) notifs,
+			  ARRAY_SIZE (notifs));
+}
+
 void
 initialize_notif (void)
 {

@@ -163,7 +163,7 @@ SFILES=	$(srcdir)/gdbreplay.c $(srcdir)/inferiors.c $(srcdir)/dll.c \
 	$(srcdir)/common/linux-osdata.c $(srcdir)/common/ptid.c \
 	$(srcdir)/common/buffer.c $(srcdir)/common/linux-btrace.c \
 	$(srcdir)/common/filestuff.c $(srcdir)/target/waitstatus.c \
-    $(srcdir)/common/mips-linux-watch.c
+    $(srcdir)/common/mips-linux-watch.c $(srcdir)/common/notif-base.c
 
 DEPFILES = @GDBSERVER_DEPFILES@
 
@@ -173,7 +173,7 @@ SOURCES = $(SFILES)
 TAGFILES = $(SOURCES) ${HFILES} ${ALLPARAM} ${POSSLIBS}
 
 OBS = agent.o ax.o inferiors.o regcache.o remote-utils.o server.o signals.o \
-      target.o waitstatus.o utils.o version.o vec.o gdb_vecs.o \
+      target.o waitstatus.o utils.o version.o vec.o gdb_vecs.o notif-base.o \
       mem-break.o hostio.o event-loop.o tracepoint.o xml-utils.o \
       common-utils.o ptid.o buffer.o format.o filestuff.o dll.o notif.o \
       tdesc.o $(XML_BUILTIN) $(DEPFILES) $(LIBOBJS)
@@ -484,6 +484,9 @@ linux-ptrace.o: ../common/linux-ptrace.c
 	$(COMPILE) $<
 	$(POSTCOMPILE)
 common-utils.o: ../common/common-utils.c
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+notif-base.o: ../common/notif-base.c
 	$(COMPILE) $<
 	$(POSTCOMPILE)
 vec.o: ../common/vec.c

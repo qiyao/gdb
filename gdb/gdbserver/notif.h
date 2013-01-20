@@ -60,6 +60,8 @@ extern struct notif_server notif_stop;
 
 int handle_notif_ack (char *own_buf, int packet_len);
 void notif_write_event (struct notif_server *notif, char *own_buf);
+char* notif_qsupported_reply (void);
+void notif_qsupported_record (char *gdb_notifications);
 
 void notif_push (struct notif_server *np, struct notif_event *event);
 void notif_event_enque (struct notif_server *notif,

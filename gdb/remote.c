@@ -1369,6 +1369,7 @@ enum {
   PACKET_Qbtrace_off,
   PACKET_Qbtrace_bts,
   PACKET_qXfer_btrace,
+  PACKET_notifications,
   PACKET_MAX
 };
 
@@ -3573,7 +3574,7 @@ remote_start_remote (int from_tty, struct target_ops *target, int extended_p)
 	  /* remote_notif_get_pending_replies acks this one, and gets
 	     the rest out.  */
 	  notif_client_stop.pending_event
-	    = remote_notif_parse (notif, rs->buf);
+	    = remote_notif_parse (notif, rs->notif_state, rs->buf);
 	  remote_notif_get_pending_events (notif);
 
 	  /* Make sure that threads that were stopped remain
@@ -3993,6 +3994,17 @@ remote_augmented_libraries_svr4_read_feature
   rs->augmented_libraries_svr4_read = (support == PACKET_ENABLE);
 }
 
+static void
+remote_notifications_feature (const struct protocol_feature *feature,
+			      enum packet_support support,
+			      const char *value)
+{
+  struct remote_state *rs = get_remote_state ();
+
+  if (support == PACKET_ENABLE)
+    remote_notif_qsupported_reply (value, rs->notif_state);
+}
+
 static const struct protocol_feature remote_protocol_features[] = {
   { "PacketSize", PACKET_DISABLE, remote_packet_size, -1 },
   { "qXfer:auxv:read", PACKET_DISABLE, remote_supported_packet,
@@ -4067,7 +4079,9 @@ static const struct protocol_feature remote_protocol_features[] = {
   { "Qbtrace:off", PACKET_DISABLE, remote_supported_packet, PACKET_Qbtrace_off },
   { "Qbtrace:bts", PACKET_DISABLE, remote_supported_packet, PACKET_Qbtrace_bts },
   { "qXfer:btrace:read", PACKET_DISABLE, remote_supported_packet,
-    PACKET_qXfer_btrace }
+    PACKET_qXfer_btrace },
+  { "Notifications", PACKET_DISABLE, remote_notifications_feature,
+    -1 },
 };
 
 static char *remote_support_xml;
@@ -4132,6 +4146,7 @@ remote_query_supported (void)
   if (remote_protocol_packets[PACKET_qSupported].support != PACKET_DISABLE)
     {
       char *q = NULL;
+      char *notifications = remote_notif_qsupported ();
       struct cleanup *old_chain = make_cleanup (free_current_contents, &q);
 
       q = remote_query_supported_append (q, "multiprocess+");
@@ -4140,6 +4155,10 @@ remote_query_supported (void)
 	q = remote_query_supported_append (q, remote_support_xml);
 
       q = remote_query_supported_append (q, "qRelocInsn+");
+
+      q = reconcat (q, q, ";notifications=", notifications,
+		    (char *) NULL);
+      xfree (notifications);
 
       q = reconcat (q, "qSupported:", q, (char *) NULL);
       putpkt (q);
@@ -4597,7 +4616,8 @@ extended_remote_attach_1 (struct target_ops *target, char *args, int from_tty)
       if (target_can_async_p ())
 	{
 	  struct notif_event *reply
-	    =  remote_notif_parse (&notif_client_stop, wait_status);
+	    =  remote_notif_parse (&notif_client_stop, rs->notif_state,
+				   wait_status);
 
 	  push_stop_reply ((struct stop_reply *) reply);
 
@@ -5371,7 +5391,7 @@ remote_notif_stop_alloc_reply (void)
 
 static struct notif_annex notif_client_annex_stop[] =
 {
-  { NULL, remote_notif_stop_parse, },
+  { NULL, -1, remote_notif_stop_parse, },
 };
 
 /* A client of notification Stop.  */
@@ -5817,7 +5837,7 @@ remote_notif_get_pending_events (struct notif_client *nc)
 	  if (strcmp (rs->buf, "OK") == 0)
 	    break;
 	  else
-	    remote_notif_ack (nc, rs->buf);
+	    remote_notif_ack (nc, rs->notif_state, rs->buf);
 	}
     }
   else
@@ -6021,6 +6041,7 @@ remote_wait_as (ptid_t ptid, struct target_waitstatus *status, int options)
       {
 	struct stop_reply *stop_reply
 	  = (struct stop_reply *) remote_notif_parse (&notif_client_stop,
+						      rs->notif_state,
 						      rs->buf);
 
 	event_ptid = process_stop_reply (stop_reply, status);
