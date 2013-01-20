@@ -521,7 +521,7 @@ SER_HARDWIRE = @SER_HARDWIRE@
 # The `remote' debugging target is supported for most architectures,
 # but not all (e.g. 960)
 REMOTE_OBS = remote.o dcache.o tracepoint.o ax-general.o ax-gdb.o remote-fileio.o \
-	remote-notif.o ctf.o
+	remote-notif.o ctf.o notif-base.o
 
 # This is remote-sim.o if a simulator is to be linked in.
 SIM_OBS = @SIM_OBS@
@@ -751,7 +751,8 @@ SFILES = ada-exp.y ada-lang.c ada-typeprint.c ada-valprint.c ada-tasks.c \
 	p-exp.y p-lang.c p-typeprint.c p-valprint.c parse.c printcmd.c \
 	proc-service.list progspace.c \
 	prologue-value.c psymtab.c \
-	regcache.c reggroups.c remote.c remote-fileio.c remote-notif.c reverse.c \
+	regcache.c reggroups.c remote.c remote-fileio.c remote-notif.c \
+	notif-base.c reverse.c \
 	sentinel-frame.c \
 	serial.c ser-base.c ser-unix.c skip.c \
 	solib.c solib-target.c source.c \
@@ -1974,6 +1975,10 @@ signals.o: $(srcdir)/common/signals.c
 
 common-utils.o: ${srcdir}/common/common-utils.c
 	$(COMPILE) $(srcdir)/common/common-utils.c
+	$(POSTCOMPILE)
+
+notif-base.o: ${srcdir}/common/notif-base.c
+	$(COMPILE) $(srcdir)/common/notif-base.c
 	$(POSTCOMPILE)
 
 gdb_vecs.o: ${srcdir}/common/gdb_vecs.c

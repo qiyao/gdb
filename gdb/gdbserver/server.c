@@ -187,7 +187,7 @@ vstop_notif_reply (struct notif_event *event, char *own_buf)
 
 static struct notif_annex notif_annex_stop[] =
 {
-  { NULL, vstop_notif_reply, },
+  { NULL, 1, vstop_notif_reply, },
 };
 
 struct notif_server notif_stop =
@@ -1736,6 +1736,11 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 		  /* GDB supports relocate instruction requests.  */
 		  gdb_supports_qRelocInsn = 1;
 		}
+	      else if (strncmp (p, "notifications=", 14) == 0)
+		{
+		  /* Record what notifications GDB supports.  */
+		  notif_qsupported_record (&p[14]);
+		}
 	      else
 		target_process_qsupported (p);
 
@@ -1823,6 +1828,14 @@ handle_query (char *own_buf, int packet_len, int *new_packet_len_p)
 	  strcat (own_buf, ";Qbtrace:bts+");
 	  strcat (own_buf, ";Qbtrace:off+");
 	  strcat (own_buf, ";qXfer:btrace:read+");
+	}
+      p = notif_qsupported_reply ();
+
+      if (p != NULL)
+	{
+	  strcat (own_buf, ";Notifications=");
+	  strcat (own_buf, p);
+	  xfree (p);
 	}
 
       return;

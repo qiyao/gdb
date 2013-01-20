@@ -67,10 +67,17 @@ struct remote_notif_state
 {
   /* Notification queue.  */
   QUEUE(notif_client_p) *notif_queue;
+
+  /* Each element indicates the annex is supported by the remote
+     stub or not.  The index is the field 'id' in
+     'struct notif_annex'.  */
+  int *supported;
 };
 
-void remote_notif_ack (struct notif_client *nc, char *buf);
+void remote_notif_ack (struct notif_client *nc,
+		       struct remote_notif_state *state, char *buf);
 struct notif_event *remote_notif_parse (struct notif_client *nc,
+					struct remote_notif_state *state,
 					char *buf);
 
 void handle_notification (struct remote_notif_state *notif_state,
@@ -82,6 +89,11 @@ void remote_notif_unregister_async_event_handler (void);
 void remote_notif_process (struct remote_notif_state *state,
 			   struct notif_client *except);
 struct remote_notif_state *remote_notif_state (void);
+
+
+char * remote_notif_qsupported (void);
+void remote_notif_qsupported_reply (const char *reply,
+				    struct remote_notif_state *state);
 
 extern struct notif_client notif_client_stop;
 

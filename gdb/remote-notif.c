@@ -57,6 +57,7 @@ static void do_notif_event_xfree (void *arg);
 
 static void
 remote_notif_parse_1 (struct notif_client *nc,
+		      struct remote_notif_state *state,
 		      struct notif_event *event, char *buf)
 {
   const struct notif_annex *m = NULL;
@@ -73,9 +74,16 @@ remote_notif_parse_1 (struct notif_client *nc,
 		 contents in BUF.  */
 	      && buf[strlen (m->name)] == ':')
 	    {
-	      /* Pass BUF without annex and ':'.  */
-	      m->parse (nc, buf + strlen (m->name) + 1, event);
-	      break;
+	      if (state->supported[m->id])
+		{
+		  /* Pass BUF without annex and ':'.  */
+		  m->parse (nc, buf + strlen (m->name) + 1, event);
+		  break;
+		}
+	      else
+		warning (_("GDB gets annex '%s' of notification '%s'"
+			   "but remote stub doesn't support"),
+			 base->notif_name, m->name);
 	    }
 	  m = NULL;
 	}
@@ -95,7 +103,8 @@ remote_notif_parse_1 (struct notif_client *nc,
    acknowledge.  */
 
 void
-remote_notif_ack (struct notif_client *nc, char *buf)
+remote_notif_ack (struct notif_client *nc,
+		  struct remote_notif_state *state, char *buf)
 {
   struct notif_event *event = nc->alloc_event ();
   struct cleanup *old_chain
@@ -105,7 +114,7 @@ remote_notif_ack (struct notif_client *nc, char *buf)
     fprintf_unfiltered (gdb_stdlog, "notif: ack '%s'\n",
 			nc->base.ack_name);
 
-  remote_notif_parse_1 (nc, event, buf);
+  remote_notif_parse_1 (nc, state, event, buf);
   nc->ack (nc, buf, event);
 
   discard_cleanups (old_chain);
@@ -114,7 +123,8 @@ remote_notif_ack (struct notif_client *nc, char *buf)
 /* Parse the BUF for the expected notification NC.  */
 
 struct notif_event *
-remote_notif_parse (struct notif_client *nc, char *buf)
+remote_notif_parse (struct notif_client *nc,
+		    struct remote_notif_state *state, char *buf)
 {
   struct notif_event *event = nc->alloc_event ();
   struct cleanup *old_chain
@@ -124,7 +134,7 @@ remote_notif_parse (struct notif_client *nc, char *buf)
     fprintf_unfiltered (gdb_stdlog, "notif: parse '%s'\n",
 			nc->base.notif_name);
 
-  remote_notif_parse_1 (nc, event, buf);
+  remote_notif_parse_1 (nc, state, event, buf);
 
   discard_cleanups (old_chain);
   return event;
@@ -219,7 +229,7 @@ handle_notification (struct remote_notif_state *state, char *buf)
   else
     {
       struct notif_event *event
-	= remote_notif_parse (nc,
+	= remote_notif_parse (nc, state,
 			      buf + strlen (nc->base.notif_name) + 1);
 
       /* Be careful to only set it after parsing, since an error
@@ -301,6 +311,60 @@ notif_xfree (struct notif_client *notif)
   xfree (notif);
 }
 
+/* Return a string of GDB supported features.  */
+
+char *
+remote_notif_qsupported (void)
+{
+  return notif_supported ((struct notif_base **) notifs,
+			  ARRAY_SIZE (notifs));
+}
+
+/* Parse the qSupported reply REPLY from the remote stub and disable
+   some notifications if the remote stub doesn't support.  */
+
+void
+remote_notif_qsupported_reply (const char *reply,
+			       struct remote_notif_state *state)
+{
+  notif_parse_supported (reply, (struct notif_base **) notifs,
+			 ARRAY_SIZE (notifs), state);
+
+  if (notif_debug)
+    {
+      int i;
+
+      fprintf_unfiltered (gdb_stdlog,
+			  "notif: stub supported notifications '%s'\n",
+			  reply);
+      fprintf_unfiltered (gdb_stdlog, "notif annexes:\n");
+      for (i = 0; i < ARRAY_SIZE (notifs); i++)
+	{
+	  struct notif_base *nb  = (struct notif_base *) notifs[i];
+
+	  fprintf_unfiltered (gdb_stdlog, "%-10s ", nb->notif_name);
+	  if (NOTIF_HAS_ANNEX (nb))
+	    {
+	      int j;
+	      struct notif_annex *annex;
+
+	      NOTIF_ITER_ANNEX (nb, j, annex)
+		fprintf_unfiltered (gdb_stdlog, "\n %-10s %d", annex->name,
+				    NOTIF_ANNEX_SUPPORTED (state, nb, j));
+	    }
+	  else
+	    fprintf_unfiltered (gdb_stdlog, " %d",
+				NOTIF_ANNEX_SUPPORTED (state, nb, 0));
+
+	  fprintf_unfiltered (gdb_stdlog, "\n");
+	}
+    }
+}
+
+/* Total number of annexes.  */
+
+static int notif_annex_number = 0;
+
 /* Return an allocated remote_notif_state.  */
 
 struct remote_notif_state *
@@ -309,6 +373,14 @@ remote_notif_state (void)
   struct remote_notif_state *notif_state = xmalloc (sizeof (*notif_state));
 
   notif_state->notif_queue = QUEUE_alloc (notif_client_p, notif_xfree);
+  notif_state->supported = xmalloc (notif_annex_number * sizeof (int));
+  memset (notif_state->supported, 0, notif_annex_number * sizeof (int));
+
+  /* Even the remote stub doesn't understand
+     'qSupported:notifications=', it may still support notification
+     stop if it supports non-stop.  */
+  NOTIF_ANNEX_SUPPORTED (notif_state, &notif_client_stop.base, 0) = 1;
+
   return notif_state;
 }
 
@@ -318,6 +390,26 @@ extern initialize_file_ftype _initialize_notif;
 void
 _initialize_notif (void)
 {
+  int i;
+
+  /* Initialize the field of 'struct notif_annex' which is the index
+     of array which is about whether the annex is supported or not.  */
+  for (i = 0; i < ARRAY_SIZE (notifs); i++)
+    {
+      struct notif_base *nb  = (struct notif_base *) notifs[i];
+
+      if (NOTIF_HAS_ANNEX (nb))
+	{
+	  int j;
+	  struct notif_annex *annex;
+
+	  NOTIF_ITER_ANNEX (nb, j, annex)
+	    annex->id = notif_annex_number++;
+	}
+      else
+	nb->annexes[0].id = notif_annex_number++;
+    }
+
   add_setshow_boolean_cmd ("notification", no_class, &notif_debug,
 			   _("\
 Set debugging of async remote notification."), _("\
