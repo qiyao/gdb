@@ -1,0 +1,59 @@
+# Copyright (C) 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# This test case is to test the speed of GDB when it is doing disassemble
+# a large range of code.  We are using GDB to disassemble .text section
+# of GDB.
+load_lib perftest.exp
+
+if [skip_perf_tests] {
+    return 0
+}
+
+global GDB
+
+standard_testfile .c
+# Overwrite $binfile
+set binfile $GDB
+
+PerfTest::assemble {
+    compile {
+	PerfTest::compiled
+    }
+} {
+    startup_gdb {
+	gdb_exit
+	gdb_start
+	# When GDB is debugging GDB, the prompt is changed to "(top-gdb) ".
+	# In order to avoid the confusion of pattern matching, set the
+	# gdb_prompt to '(top-gdb)'.
+
+	global gdb_prompt
+	set gdb_prompt "\[(\]top-gdb\[)\]"
+
+	gdb_test_no_output "set prompt \(top-gdb\) " ""
+
+	gdb_reinitialize_dir $srcdir/$subdir
+	gdb_load ${binfile}
+
+	if ![runto_main] {
+	    return -1
+	}
+    }
+} {
+    run {
+	gdb_test "python Disassemble\(\).run()"
+    }
+}
