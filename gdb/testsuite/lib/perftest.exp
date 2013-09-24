@@ -1,0 +1,148 @@
+# Copyright (C) 2013 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+namespace eval PerfTest {
+    # The name of python file on build.
+    variable remote_python_file
+
+    # The source files are compiled successfully or not.
+    variable compiled_ok
+
+    # A private method to set up GDB for performance testing.
+    proc _setup_perftest {} {
+	variable remote_python_file
+	global srcdir subdir testfile
+
+	set remote_python_file [gdb_remote_download host ${srcdir}/${subdir}/${testfile}.py]
+
+	# Set sys.path for module perftest.
+	gdb_test_no_output "python import os, sys"
+	gdb_test_no_output "python sys.path.insert\(0, os.path.abspath\(\"${srcdir}/${subdir}/lib\"\)\)"
+	gdb_test_no_output "python exec (open ('${remote_python_file}').read ())"
+    }
+
+    # A private method to do some cleanups when performance test is
+    # finished.
+    proc _teardown_perftest {} {
+	variable remote_python_file
+
+	remote_file host delete $remote_python_file
+    }
+
+    # Compile source files of test case.  BODY is the tcl code to do
+    # actual compilation and it should invoke 'PerfTest::compiled' if
+    # compilation is successful.
+    proc compile {body} {
+	global GDB_PERFORMANCE
+
+	if { [info exists GDB_PERFORMANCE]
+	     && [string compare $GDB_PERFORMANCE "run"] } {
+	    variable compiled_ok
+
+	    set compiled_ok 0
+	    uplevel 2 $body
+
+	    if {!$compiled_ok} {
+		untested "Could not compile source files."
+		return -1
+	    }
+	}
+    }
+
+    # Mark the compilation is finished successfully.
+    proc compiled {} {
+	variable compiled_ok
+
+	set compiled_ok 1
+    }
+
+    # Start up GDB.
+    proc startup_gdb {body} {
+	variable compiled_ok
+
+	if {!$compiled_ok} {
+	    return
+	}
+
+	uplevel 2 $body
+    }
+
+    # Run the performance test.
+    proc run {body} {
+	global timeout
+	global GDB_PERFORMANCE_TIMEOUT
+
+	set oldtimeout $timeout
+	if { [info exists GDB_PERFORMANCE_TIMEOUT] } {
+	    set timeout $GDB_PERFORMANCE_TIMEOUT
+	} else {
+	    set timeout 3000
+	}
+	uplevel 2 $body
+
+	set timeout $oldtimeout
+    }
+
+    # The top-level interface to PerfTest.
+    # COMPILE is the tcl code to generate and compile source files.
+    # STARTUP is the tcl code to start up GDB.
+    # RUN is the tcl code to drive GDB to do some operations.
+    proc assemble {compile startup run} {
+	variable compiled_ok
+	global GDB_PERFORMANCE
+
+	set compiled_ok 1
+	eval $compile
+
+	if {!$compiled_ok} {
+	    return
+	}
+
+	# Don't execute the run if GDB_PERFORMANCE=compile.
+	if { [info exists GDB_PERFORMANCE]
+	     && [string compare $GDB_PERFORMANCE "compile"] == 0} {
+	    return
+	}
+
+	eval $startup
+
+	_setup_perftest
+
+	eval $run
+
+	_teardown_perftest
+    }
+}
+
+# Return true if performance tests are skipped.
+
+proc skip_perf_tests { } {
+    global GDB_PERFORMANCE
+
+    if [info exists GDB_PERFORMANCE] {
+
+	if { "$GDB_PERFORMANCE" != "compile"
+	     && "$GDB_PERFORMANCE" != "run"
+	     && "$GDB_PERFORMANCE" != "both" } {
+	    # GDB_PERFORMANCE=compile|run|both is allowed.
+	    unsupported "Unknown value of GDB_PERFORMANCE."
+	    return 1
+	}
+
+	return 0
+    }
+
+    return 1
+}
