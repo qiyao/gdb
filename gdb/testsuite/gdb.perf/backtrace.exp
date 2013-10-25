@@ -1,0 +1,42 @@
+load_lib perftest.exp
+
+if [skip_perf_tests] {
+    return 0
+}
+
+standard_testfile .c
+set executable $testfile
+set expfile $testfile.exp
+
+# make check RUNTESTFLAGS='backtrace.exp BACKTRACE_DEPTH=1024'
+if ![info exists BACKTRACE_DEPTH] {
+    set BACKTRACE_DEPTH 64
+}
+
+PerfTest::assemble {
+    compile {
+	global BACKTRACE_DEPTH
+	set compile_flags {debug}
+	lappend compile_flags "additional_flags=-DBACKTRACE_DEPTH=${BACKTRACE_DEPTH}"
+
+	if { [gdb_compile "$srcdir/$subdir/$srcfile" ${binfile} executable $compile_flags] == ""} {
+	    PerfTest::compiled
+	}
+    }
+} {
+    startup_gdb {
+	clean_restart $binfile
+
+	if ![runto_main] {
+	    fail "Can't run to main"
+	    return -1
+	}
+
+	gdb_breakpoint "fun2"
+	gdb_continue_to_breakpoint "fun2"
+    }
+} {
+    run {
+	gdb_test "python BackTrace\($BACKTRACE_DEPTH\).run()"
+    }
+}
