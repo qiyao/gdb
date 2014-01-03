@@ -42,7 +42,7 @@ static LONGEST
 procfs_xfer_auxv (gdb_byte *readbuf,
 		  const gdb_byte *writebuf,
 		  ULONGEST offset,
-		  LONGEST len)
+		  ULONGEST len)
 {
   char *pathname;
   int fd;
@@ -73,7 +73,7 @@ static LONGEST
 ld_so_xfer_auxv (gdb_byte *readbuf,
 		 const gdb_byte *writebuf,
 		 ULONGEST offset,
-		 LONGEST len)
+		 ULONGEST len)
 {
   struct minimal_symbol *msym;
   CORE_ADDR data_address, pointer_address;
@@ -178,7 +178,10 @@ ld_so_xfer_auxv (gdb_byte *readbuf,
 	}
 
       data_address += block;
-      len -= block;
+      if (len < block)
+	len = 0;
+      else
+	len -= block;
 
       /* Check terminal AT_NULL.  This function is being called
          indefinitely being extended its READBUF until it returns EOF
@@ -209,7 +212,7 @@ memory_xfer_auxv (struct target_ops *ops,
 		  gdb_byte *readbuf,
 		  const gdb_byte *writebuf,
 		  ULONGEST offset,
-		  LONGEST len)
+		  ULONGEST len)
 {
   gdb_assert (object == TARGET_OBJECT_AUXV);
   gdb_assert (readbuf || writebuf);
