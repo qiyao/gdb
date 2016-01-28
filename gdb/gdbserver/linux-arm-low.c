@@ -942,6 +942,14 @@ arm_gdbserver_get_next_pcs (struct regcache *regcache)
   return next_pcs;
 }
 
+/* Implementation of linux_target_ops method "supports_range_stepping".  */
+
+static int
+arm_supports_range_stepping (void)
+{
+  return 1;
+}
+
 /* Support for hardware single step.  */
 
 static int
@@ -1028,7 +1036,7 @@ struct linux_target_ops the_low_target = {
   NULL, /* install_fast_tracepoint_jump_pad */
   NULL, /* emit_ops */
   NULL, /* get_min_fast_tracepoint_insn_len */
-  NULL, /* supports_range_stepping */
+  arm_supports_range_stepping,
   arm_breakpoint_kind_from_current_state,
   arm_supports_hardware_single_step
 };
